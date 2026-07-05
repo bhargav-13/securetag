@@ -53,6 +53,24 @@ export default function ClaimForm({ id }: { id: string }) {
         placeholder="e.g. Please call if my car is blocking you. Thanks!"
       />
 
+      <h3 className="mt">Emergency &amp; alternate contact</h3>
+      <p className="muted small">Shown to a scanner only after you accept their request — same as your phone number.</p>
+
+      <label htmlFor="emergency_contact_name">Emergency contact name</label>
+      <input id="emergency_contact_name" name="emergency_contact_name" placeholder="e.g. Spouse, parent, or friend" />
+
+      <label htmlFor="emergency_contact_phone">Emergency contact phone</label>
+      <input id="emergency_contact_phone" name="emergency_contact_phone" inputMode="tel" placeholder="e.g. +91 98765 43210" />
+
+      <label htmlFor="alt_phone">Alternate phone</label>
+      <input id="alt_phone" name="alt_phone" inputMode="tel" placeholder="Backup number, if your primary is unreachable" />
+
+      <label htmlFor="alt_email">Alternate email</label>
+      <input id="alt_email" name="alt_email" type="email" placeholder="e.g. you@example.com" />
+
+      <label htmlFor="address">Address / location</label>
+      <input id="address" name="address" placeholder="Home or usual parking address" />
+
       {state?.error && <p className="error">{state.error}</p>}
 
       <div className="mt">

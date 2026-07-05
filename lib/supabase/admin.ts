@@ -26,6 +26,11 @@ export type Tag = {
   car_model: string | null;
   plate_number: string | null;
   message: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  alt_phone: string | null;
+  alt_email: string | null;
+  address: string | null;
   lost_mode: boolean;
   created_at: string;
   claimed_at: string | null;

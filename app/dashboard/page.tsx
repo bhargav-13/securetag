@@ -30,41 +30,7 @@ export default async function Dashboard({
   if (!user) redirect("/login?next=/dashboard");
   const db = getAdminClient();
 
-  /* ---------------- ADMIN ---------------- */
-  if (user.isAdmin) {
-    const { data } = await db.from("tags").select("*").order("created_at", { ascending: false });
-    const tags = (data as Tag[]) ?? [];
-    const registered = tags.filter((t) => t.claimed).length;
-
-    return (
-      <main className="container wide stack">
-        <div className="spread">
-          <div>
-            <span className="pill brand">Admin</span>
-            <h1 style={{ marginTop: 8 }}>Tag inventory</h1>
-          </div>
-          <Link href="/dashboard/users" className="btn secondary small">Manage users</Link>
-        </div>
-
-        <div className="card">
-          <h2>Generate QR tags</h2>
-          <p className="muted">Each code is a unique unregistered tag. Print it — the buyer scans it, logs in, and fills in their vehicle details.</p>
-          {searchParams.created && <div className="notice mt">✅ Created {searchParams.created} new tag(s).</div>}
-          <div className="mt"><GenerateForm /></div>
-        </div>
-
-        <div className="card">
-          <div className="row wrap" style={{ justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0 }}>All tags ({tags.length})</h2>
-            <span className="muted small">{registered} registered · {tags.length - registered} unregistered</span>
-          </div>
-          {tags.length === 0 ? <p className="muted mt">No tags yet. Generate some above.</p> : <AdminTagManager tags={tags} />}
-        </div>
-      </main>
-    );
-  }
-
-  /* ---------------- OWNER ---------------- */
+  /* ---------------- OWNER (fetched for everyone — admins can own tags too) ---------------- */
   const [{ data: tagsData }, { data: reqData }] = await Promise.all([
     db.from("tags").select("*").eq("owner_user_id", user.id).order("claimed_at", { ascending: false }),
     db
@@ -77,15 +43,9 @@ export default async function Dashboard({
   const tags = (tagsData as Tag[]) ?? [];
   const pending = (reqData as ScanReq[]) ?? [];
 
-  return (
-    <main className="container stack">
+  const ownerSection = (
+    <>
       <RealtimeNotifier userId={user.id} />
-
-      <div>
-        <span className="pill brand">My account</span>
-        <h1 style={{ marginTop: 8 }}>Dashboard</h1>
-        <p className="muted">{user.email}</p>
-      </div>
 
       {/* Pending scan requests */}
       <div className="card">
@@ -154,6 +114,55 @@ export default async function Dashboard({
           ))
         )}
       </div>
+    </>
+  );
+
+  /* ---------------- ADMIN ---------------- */
+  if (user.isAdmin) {
+    const { data } = await db.from("tags").select("*").order("created_at", { ascending: false });
+    const allTags = (data as Tag[]) ?? [];
+    const registered = allTags.filter((t) => t.claimed).length;
+
+    return (
+      <main className="container wide stack">
+        <div className="spread">
+          <div>
+            <span className="pill brand">Admin</span>
+            <h1 style={{ marginTop: 8 }}>Tag inventory</h1>
+          </div>
+          <Link href="/dashboard/users" className="btn secondary small">Manage users</Link>
+        </div>
+
+        {tags.length > 0 && <div className="stack">{ownerSection}</div>}
+
+        <div className="card">
+          <h2>Generate QR tags</h2>
+          <p className="muted">Each code is a unique unregistered tag. Print it — the buyer scans it, logs in, and fills in their vehicle details.</p>
+          {searchParams.created && <div className="notice mt">✅ Created {searchParams.created} new tag(s).</div>}
+          <div className="mt"><GenerateForm /></div>
+        </div>
+
+        <div className="card">
+          <div className="row wrap" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>All tags ({allTags.length})</h2>
+            <span className="muted small">{registered} registered · {allTags.length - registered} unregistered</span>
+          </div>
+          {allTags.length === 0 ? <p className="muted mt">No tags yet. Generate some above.</p> : <AdminTagManager tags={allTags} />}
+        </div>
+      </main>
+    );
+  }
+
+  /* ---------------- OWNER ---------------- */
+  return (
+    <main className="container stack">
+      <div>
+        <span className="pill brand">My account</span>
+        <h1 style={{ marginTop: 8 }}>Dashboard</h1>
+        <p className="muted">{user.email}</p>
+      </div>
+
+      {ownerSection}
     </main>
   );
 }

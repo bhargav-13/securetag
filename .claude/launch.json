@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3100,
       "autoPort": false
+    },
+    {
+      "name": "securetag-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"],
+      "port": 3100,
+      "autoPort": false
     }
   ]
 }

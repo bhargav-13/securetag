@@ -54,6 +54,11 @@ create table if not exists public.tags (
 );
 alter table public.tags add column if not exists owner_user_id uuid references auth.users(id) on delete set null;
 alter table public.tags add column if not exists lost_mode boolean not null default false;
+alter table public.tags add column if not exists emergency_contact_name text;
+alter table public.tags add column if not exists emergency_contact_phone text;
+alter table public.tags add column if not exists alt_phone text;
+alter table public.tags add column if not exists alt_email text;
+alter table public.tags add column if not exists address text;
 create index if not exists tags_owner_idx on public.tags(owner_user_id);
 
 -- ---------- scan_requests (the notify & accept flow) ----------

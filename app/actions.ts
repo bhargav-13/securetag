@@ -64,6 +64,11 @@ export async function claimTag(_prev: FormState, formData: FormData): Promise<Fo
   const car_model = String(formData.get("car_model") || "").trim();
   const plate_number = String(formData.get("plate_number") || "").trim();
   const message = String(formData.get("message") || "").trim();
+  const emergency_contact_name = String(formData.get("emergency_contact_name") || "").trim();
+  const emergency_contact_phone = String(formData.get("emergency_contact_phone") || "").trim();
+  const alt_phone = String(formData.get("alt_phone") || "").trim();
+  const alt_email = String(formData.get("alt_email") || "").trim();
+  const address = String(formData.get("address") || "").trim();
 
   if (!id) return { error: "Missing tag id." };
   if (!owner_name || !phone) return { error: "Name and phone number are required." };
@@ -83,6 +88,11 @@ export async function claimTag(_prev: FormState, formData: FormData): Promise<Fo
       car_model: car_model || null,
       plate_number: plate_number || null,
       message: message || null,
+      emergency_contact_name: emergency_contact_name || null,
+      emergency_contact_phone: emergency_contact_phone || null,
+      alt_phone: alt_phone || null,
+      alt_email: alt_email || null,
+      address: address || null,
       claimed_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -103,6 +113,11 @@ export async function updateTag(_prev: FormState, formData: FormData): Promise<F
   const car_model = String(formData.get("car_model") || "").trim();
   const plate_number = String(formData.get("plate_number") || "").trim();
   const message = String(formData.get("message") || "").trim();
+  const emergency_contact_name = String(formData.get("emergency_contact_name") || "").trim();
+  const emergency_contact_phone = String(formData.get("emergency_contact_phone") || "").trim();
+  const alt_phone = String(formData.get("alt_phone") || "").trim();
+  const alt_email = String(formData.get("alt_email") || "").trim();
+  const address = String(formData.get("address") || "").trim();
 
   if (!id) return { error: "Missing tag id." };
   if (!owner_name || !phone) return { error: "Name and phone number are required." };
@@ -121,6 +136,11 @@ export async function updateTag(_prev: FormState, formData: FormData): Promise<F
       car_model: car_model || null,
       plate_number: plate_number || null,
       message: message || null,
+      emergency_contact_name: emergency_contact_name || null,
+      emergency_contact_phone: emergency_contact_phone || null,
+      alt_phone: alt_phone || null,
+      alt_email: alt_email || null,
+      address: address || null,
     })
     .eq("id", id);
   if (error) return { error: error.message };
@@ -172,6 +192,11 @@ export type ScanResult = {
     car_model: string | null;
     plate_number: string | null;
     message: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    alt_phone: string | null;
+    alt_email: string | null;
+    address: string | null;
   };
   error?: string;
 };
@@ -225,7 +250,11 @@ export async function createScanRequest(input: {
     }
   }
 
-  revalidatePath("/dashboard");
+  // NOTE: intentionally no revalidatePath here. This action is called by the
+  // (anonymous) scanner from the tag page; revalidating would trigger a router
+  // refresh that remounts the scanner's RequestFlow and drops the "waiting"
+  // state. The owner's dashboard picks up the new request via its own polling
+  // + Realtime subscription instead.
 
   if (isLost) {
     return {
@@ -237,6 +266,11 @@ export async function createScanRequest(input: {
         car_model: tag.car_model,
         plate_number: tag.plate_number,
         message: tag.message,
+        emergency_contact_name: tag.emergency_contact_name,
+        emergency_contact_phone: tag.emergency_contact_phone,
+        alt_phone: tag.alt_phone,
+        alt_email: tag.alt_email,
+        address: tag.address,
       },
     };
   }
@@ -248,7 +282,8 @@ export async function attachScanLocation(requestId: string, lat: number, lng: nu
   if (!requestId) return;
   const db = getAdminClient();
   await db.from("scan_requests").update({ scanner_lat: lat, scanner_lng: lng }).eq("id", requestId);
-  revalidatePath("/dashboard");
+  // No revalidatePath: this is called from the scanner's page. The owner's
+  // dashboard reflects the location via its polling/Realtime refresh.
 }
 
 /** Owner accepts or declines a pending scan request. */

@@ -26,6 +26,19 @@ function Icon({ path }: { path: string }) {
 function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostMode: boolean; requestId: string }) {
   const [shared, setShared] = useState(false);
   const tel = contact.phone ? `tel:${contact.phone.replace(/\s+/g, "")}` : null;
+  const altTel = contact.alt_phone ? `tel:${contact.alt_phone.replace(/\s+/g, "")}` : null;
+  const emergencyTel = contact.emergency_contact_phone
+    ? `tel:${contact.emergency_contact_phone.replace(/\s+/g, "")}`
+    : null;
+  const dialedRef = useRef(false);
+
+  // Owner approved — open the dialer immediately, no extra tap needed.
+  useEffect(() => {
+    if (tel && !dialedRef.current) {
+      dialedRef.current = true;
+      window.location.href = tel;
+    }
+  }, [tel]);
 
   function shareLocation() {
     if (!navigator.geolocation) return;
@@ -48,8 +61,16 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
         <div className="field"><span className="k">Phone</span><span className="v">{contact.phone}</span></div>
         {contact.car_model && <div className="field"><span className="k">Vehicle</span><span className="v">{contact.car_model}</span></div>}
         {contact.plate_number && <div className="field"><span className="k">Number plate</span><span className="v">{contact.plate_number}</span></div>}
+        {contact.address && <div className="field"><span className="k">Address</span><span className="v">{contact.address}</span></div>}
+        {contact.alt_email && <div className="field"><span className="k">Email</span><span className="v">{contact.alt_email}</span></div>}
       </div>
       {tel && <a className="call-btn" href={tel}>📞 Call {contact.owner_name}</a>}
+      {altTel && <a className="call-btn secondary" href={altTel} style={{ marginTop: 8 }}>📞 Call alternate number</a>}
+      {emergencyTel && (
+        <a className="call-btn secondary" href={emergencyTel} style={{ marginTop: 8 }}>
+          📞 Call emergency contact{contact.emergency_contact_name ? ` (${contact.emergency_contact_name})` : ""}
+        </a>
+      )}
       {lostMode && (
         <div className="lost-note" style={{ marginTop: 16 }}>
           <b>This car is marked lost.</b>{" "}
@@ -65,6 +86,8 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
   );
 }
 
+const pendingKey = (tagId: string) => `securetag:pending:${tagId}`;
+
 export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMode: boolean }) {
   const [phase, setPhase] = useState<"reason" | "submitting" | "pending" | "accepted" | "declined" | "error">("reason");
   const [reason, setReason] = useState<string | null>(null);
@@ -74,6 +97,20 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
   const [err, setErr] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Resume a waiting request after any refresh/remount so the scanner stays
+  // on the waiting screen until the owner accepts or declines.
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(pendingKey(tagId));
+      if (saved) {
+        setRequestId(saved);
+        setPhase("pending");
+      }
+    } catch {
+      /* sessionStorage unavailable — ignore */
+    }
+  }, [tagId]);
+
   // Poll for owner response while pending.
   useEffect(() => {
     if (phase !== "pending" || !requestId) return;
@@ -82,10 +119,16 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
         const r = await fetch(`/api/scan/status/${requestId}`, { cache: "no-store" });
         const data = await r.json();
         if (data.status === "accepted" || data.status === "auto") {
+          try { sessionStorage.removeItem(pendingKey(tagId)); } catch {}
           setContact(data.contact);
           setPhase("accepted");
         } else if (data.status === "declined") {
+          try { sessionStorage.removeItem(pendingKey(tagId)); } catch {}
           setPhase("declined");
+        } else if (data.status === "notfound") {
+          // Request no longer exists — let the scanner start over.
+          try { sessionStorage.removeItem(pendingKey(tagId)); } catch {}
+          setPhase("reason");
         }
       } catch {
         /* keep polling */
@@ -94,7 +137,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [phase, requestId]);
+  }, [phase, requestId, tagId]);
 
   async function submit() {
     if (!reason) return;
@@ -110,6 +153,8 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
       setContact(res.contact);
       setPhase("accepted");
     } else {
+      // Remember the pending request so a refresh keeps us on the waiting page.
+      try { sessionStorage.setItem(pendingKey(tagId), res.requestId); } catch {}
       setPhase("pending");
     }
   }
