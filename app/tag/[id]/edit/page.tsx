@@ -37,7 +37,7 @@ export default async function EditPage({
           <EditForm tag={tag} />
         )}
         <p className="muted center mt">
-          <Link href={`/tag/${tag.id}`}>← Back to tag</Link>
+          <Link href={`/tag/${tag.id}`}>Back to tag</Link>
         </p>
       </div>
     </main>

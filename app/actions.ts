@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionUser, requireAdmin } from "@/lib/auth";
-import { sendEmail, scanAlertEmail } from "@/lib/email";
+import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function shortCode(len = 8) {
@@ -217,38 +217,50 @@ export async function createScanRequest(input: {
   const { data: tag } = await db.from("tags").select("*").eq("id", input.tagId).maybeSingle();
   if (!tag || !tag.claimed) return { requestId: "", status: "pending", error: "Tag not registered." };
 
-  const isLost = Boolean(tag.lost_mode);
-  const status = isLost ? "auto" : "pending";
+  const reason = input.reason || "Other";
+  const emergency = isEmergencyReason(reason);
+  // Lost Mode OR an emergency/accident → share contact immediately (no Accept).
+  const immediate = Boolean(tag.lost_mode) || emergency;
+  const status = immediate ? "auto" : "pending";
 
   const { data: inserted, error } = await db
     .from("scan_requests")
     .insert({
       tag_id: tag.id,
       owner_user_id: tag.owner_user_id,
-      reason: input.reason || "Other",
+      reason,
       scanner_message: input.message || null,
       scanner_lat: input.lat ?? null,
       scanner_lng: input.lng ?? null,
       status,
-      responded_at: isLost ? new Date().toISOString() : null,
+      responded_at: immediate ? new Date().toISOString() : null,
     })
     .select("id")
     .single();
   if (error || !inserted) return { requestId: "", status: "pending", error: error?.message || "Failed." };
 
-  // Email the owner (no-op if RESEND_API_KEY unset).
+  // Alert the owner (always) + emergency/alt contacts (if emergency) across
+  // email + WhatsApp, with the scanner's note and live location. Each channel
+  // no-ops if its provider isn't configured.
+  let ownerEmail: string | null = null;
   if (tag.owner_user_id) {
     const { data: profile } = await db
       .from("profiles")
       .select("email")
       .eq("id", tag.owner_user_id)
       .maybeSingle();
-    if (profile?.email) {
-      const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3100";
-      const mail = scanAlertEmail({ tagId: tag.id, reason: input.reason || "Other", baseUrl: base });
-      await sendEmail({ to: profile.email, subject: mail.subject, html: mail.html });
-    }
+    ownerEmail = profile?.email ?? null;
   }
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3100";
+  await notifyOnScan({
+    tag,
+    ownerEmail,
+    reason,
+    message: input.message,
+    lat: input.lat,
+    lng: input.lng,
+    baseUrl,
+  });
 
   // NOTE: intentionally no revalidatePath here. This action is called by the
   // (anonymous) scanner from the tag page; revalidating would trigger a router
@@ -256,7 +268,7 @@ export async function createScanRequest(input: {
   // state. The owner's dashboard picks up the new request via its own polling
   // + Realtime subscription instead.
 
-  if (isLost) {
+  if (immediate) {
     return {
       requestId: inserted.id,
       status: "auto",

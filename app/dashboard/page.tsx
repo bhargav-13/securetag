@@ -7,6 +7,7 @@ import AdminTagManager from "./AdminTagManager";
 import GenerateForm from "./GenerateForm";
 import RealtimeNotifier from "./RealtimeNotifier";
 import PendingOverlay from "@/components/PendingOverlay";
+import { PinIcon, CheckIcon, AlertIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ function TagCard({ t }: { t: Tag }) {
           <input type="hidden" name="id" value={t.id} />
           <input type="hidden" name="on" value={t.lost_mode ? "0" : "1"} />
           <button className={"btn chip-btn " + (t.lost_mode ? "secondary" : "")} type="submit">
-            {t.lost_mode ? "End Lost" : "🚨 Lost"}
+            {t.lost_mode ? "End Lost" : <><AlertIcon size={15} /> Lost</>}
           </button>
         </form>
       </div>
@@ -58,7 +59,7 @@ function RequestCard({ r }: { r: ScanReq }) {
       {r.scanner_message && <p className="rc-msg">“{r.scanner_message}”</p>}
       {r.scanner_lat != null && r.scanner_lng != null && (
         <p className="rc-loc">
-          📍 <a href={`https://maps.google.com/?q=${r.scanner_lat},${r.scanner_lng}`} target="_blank" rel="noreferrer">Scanner&apos;s location</a>
+          <PinIcon size={15} /> <a href={`https://maps.google.com/?q=${r.scanner_lat},${r.scanner_lng}`} target="_blank" rel="noreferrer">Scanner&apos;s location</a>
         </p>
       )}
       <div className="rc-actions">
@@ -66,7 +67,7 @@ function RequestCard({ r }: { r: ScanReq }) {
           <PendingOverlay label="Sharing your contact" />
           <input type="hidden" name="requestId" value={r.id} />
           <input type="hidden" name="decision" value="accepted" />
-          <button className="btn accept block small" type="submit">✓ Accept &amp; share</button>
+          <button className="btn accept block small" type="submit"><CheckIcon size={16} /> Accept &amp; share</button>
         </form>
         <form action={respondToScan}>
           <PendingOverlay label="Declining" />
@@ -75,6 +76,35 @@ function RequestCard({ r }: { r: ScanReq }) {
           <button className="btn decline small" type="submit">Decline</button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    pending: { label: "Pending", cls: "amber" },
+    accepted: { label: "Accepted", cls: "green" },
+    auto: { label: "Auto-shared", cls: "green" },
+    declined: { label: "Declined", cls: "brand" },
+  };
+  const s = map[status] || { label: status, cls: "brand" };
+  return <span className={`pill ${s.cls}`}>{s.label}</span>;
+}
+
+function HistoryRow({ r }: { r: ScanReq }) {
+  return (
+    <div className="reqcard">
+      <div className="rc-head">
+        <div className="rc-title"><span className="rc-dot" />{r.reason || "Scan"}</div>
+        <StatusBadge status={r.status} />
+      </div>
+      <div className="muted small" style={{ marginTop: 2 }}>{new Date(r.created_at).toLocaleString()}</div>
+      {r.scanner_message && <p className="rc-msg">&ldquo;{r.scanner_message}&rdquo;</p>}
+      {r.scanner_lat != null && r.scanner_lng != null && (
+        <p className="rc-loc">
+          <PinIcon size={15} /> <a href={`https://maps.google.com/?q=${r.scanner_lat},${r.scanner_lng}`} target="_blank" rel="noreferrer">View location</a>
+        </p>
+      )}
     </div>
   );
 }
@@ -95,11 +125,12 @@ export default async function Dashboard({
       .from("scan_requests")
       .select("*")
       .eq("owner_user_id", user.id)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
   const tags = (tagsData as Tag[]) ?? [];
-  const pending = (reqData as ScanReq[]) ?? [];
+  const allScans = (reqData as ScanReq[]) ?? [];
+  const pending = allScans.filter((s) => s.status === "pending");
   const activeCount = tags.filter((t) => !t.lost_mode).length;
   const lostCount = tags.filter((t) => t.lost_mode).length;
 
@@ -137,6 +168,18 @@ export default async function Dashboard({
           </div>
         )}
       </div>
+
+      {allScans.length > 0 && (
+        <div>
+          <div className="section-head">
+            <h2>Scan history</h2>
+            <span className="cnt">{allScans.length} {allScans.length === 1 ? "scan" : "scans"}</span>
+          </div>
+          <div className="tag-grid">
+            {allScans.map((r) => <HistoryRow key={r.id} r={r} />)}
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -171,7 +214,7 @@ export default async function Dashboard({
             <h2 style={{ margin: 0 }}>Generate QR tags</h2>
           </div>
           <p className="muted" style={{ marginTop: 0 }}>Each code is a unique unregistered tag. Print it — the buyer scans it, logs in, and fills in their vehicle details.</p>
-          {searchParams.created && <div className="notice mt">✅ Created {searchParams.created} new tag(s).</div>}
+          {searchParams.created && <div className="notice mt"><CheckIcon size={15} /> Created {searchParams.created} new tag(s).</div>}
           <div className="mt"><GenerateForm /></div>
         </div>
 

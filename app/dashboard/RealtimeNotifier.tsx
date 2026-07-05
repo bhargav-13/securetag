@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { BellIcon } from "@/components/Icons";
 
 /**
  * Live alert for the owner when someone scans one of their tags.
@@ -73,7 +74,9 @@ export default function RealtimeNotifier({ userId }: { userId: string }) {
   if (!toast) return null;
   return (
     <div className="toast" role="status">
-      🔔 {toast}
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <BellIcon size={18} /> {toast}
+      </span>
       <span className="toast-sub">Scroll up to respond</span>
     </div>
   );

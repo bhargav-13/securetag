@@ -14,6 +14,13 @@
       "runtimeArgs": ["run", "start"],
       "port": 3100,
       "autoPort": false
+    },
+    {
+      "name": "securetag-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "-p", "3210"],
+      "port": 3210,
+      "autoPort": true
     }
   ]
 }

@@ -28,7 +28,7 @@ export default async function UsersPage() {
           <span className="pill brand">Admin</span>
           <h1 style={{ marginTop: 8 }}>Users &amp; roles</h1>
         </div>
-        <Link href="/dashboard" className="btn secondary small">← Inventory</Link>
+        <Link href="/dashboard" className="btn secondary small">Back to inventory</Link>
       </div>
 
       <div className="card">

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ShieldMark from "@/components/ShieldMark";
+import { PhoneIcon, PinIcon } from "@/components/Icons";
 import { createScanRequest, attachScanLocation, type ScanResult } from "@/app/actions";
 
 type Contact = NonNullable<ScanResult["contact"]>;
@@ -64,11 +65,11 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
         {contact.address && <div className="field"><span className="k">Address</span><span className="v">{contact.address}</span></div>}
         {contact.alt_email && <div className="field"><span className="k">Email</span><span className="v">{contact.alt_email}</span></div>}
       </div>
-      {tel && <a className="call-btn" href={tel}>📞 Call {contact.owner_name}</a>}
-      {altTel && <a className="call-btn secondary" href={altTel} style={{ marginTop: 8 }}>📞 Call alternate number</a>}
+      {tel && <a className="call-btn" href={tel}><PhoneIcon /> Call {contact.owner_name}</a>}
+      {altTel && <a className="call-btn secondary" href={altTel} style={{ marginTop: 8 }}><PhoneIcon /> Call alternate number</a>}
       {emergencyTel && (
         <a className="call-btn secondary" href={emergencyTel} style={{ marginTop: 8 }}>
-          📞 Call emergency contact{contact.emergency_contact_name ? ` (${contact.emergency_contact_name})` : ""}
+          <PhoneIcon /> Call emergency contact{contact.emergency_contact_name ? ` (${contact.emergency_contact_name})` : ""}
         </a>
       )}
       {lostMode && (
@@ -77,7 +78,7 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
           {shared ? "Thanks — your location was shared with the owner." : "Help the owner locate it:"}
           {!shared && (
             <button type="button" className="btn small" style={{ marginTop: 10 }} onClick={shareLocation}>
-              📍 Share my location
+              <PinIcon size={16} /> Share my location
             </button>
           )}
         </div>
@@ -87,6 +88,18 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
 }
 
 const pendingKey = (tagId: string) => `securetag:pending:${tagId}`;
+
+/** Best-effort geolocation — resolves null if unavailable/denied/timeout. */
+function getPosition(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  });
+}
 
 export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMode: boolean }) {
   const [phase, setPhase] = useState<"reason" | "submitting" | "pending" | "accepted" | "declined" | "error">("reason");
@@ -142,7 +155,15 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
   async function submit() {
     if (!reason) return;
     setPhase("submitting");
-    const res = await createScanRequest({ tagId, reason, message: message.trim() || undefined });
+    // Capture location so the owner's alert includes where the car is.
+    const pos = await getPosition();
+    const res = await createScanRequest({
+      tagId,
+      reason,
+      message: message.trim() || undefined,
+      lat: pos?.lat ?? null,
+      lng: pos?.lng ?? null,
+    });
     if (res.error) {
       setErr(res.error);
       setPhase("error");
@@ -173,7 +194,23 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
     );
   }
 
-  if (phase === "pending" || phase === "submitting") {
+  if (phase === "submitting") {
+    return (
+      <div className="card center">
+        <div className="shield-loader" style={{ margin: "10px auto" }}>
+          <div className="badge" style={{ width: 76, height: 76 }}><ShieldMark /><span className="scan" /></div>
+        </div>
+        <h1 style={{ marginTop: 8 }}>Getting your location…</h1>
+        <p className="muted">
+          Allow location so the owner knows where their car is, then we&apos;ll
+          alert them. You can also tap <b>Block</b> — we&apos;ll still send the
+          request without a location.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "pending") {
     return (
       <div className="card center">
         <div className="shield-loader" style={{ margin: "10px auto" }}>
@@ -229,6 +266,9 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
       <button className="btn block lg mt" type="button" disabled={!reason} onClick={submit}>
         Send request to owner
       </button>
+      <p className="muted small center" style={{ marginTop: 10, display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "center", width: "100%" }}>
+        <PinIcon size={14} /> We&apos;ll ask for your location so the owner knows where their car is.
+      </p>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Tag } from "@/lib/supabase/admin";
+import { DownloadIcon, ArrowRightIcon } from "@/components/Icons";
 
 export default function AdminTagManager({ tags }: { tags: Tag[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -40,7 +41,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
           disabled={count === 0}
           style={{ marginLeft: "auto" }}
         >
-          ⬇ Download {count > 0 ? count : ""} as ZIP
+          <DownloadIcon size={16} /> Download {count > 0 ? count : ""} as ZIP
         </button>
       </div>
 
@@ -83,7 +84,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
               )}
               <div style={{ marginTop: 6 }}>
                 <a className="small" href={`/tag/${t.id}`} target="_blank" rel="noreferrer">
-                  Open →
+                  Open <ArrowRightIcon size={13} />
                 </a>
               </div>
             </div>

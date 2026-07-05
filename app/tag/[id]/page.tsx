@@ -6,6 +6,7 @@ import { setLostMode } from "@/app/actions";
 import ClaimForm from "./ClaimForm";
 import RequestFlow from "./RequestFlow";
 import PendingOverlay from "@/components/PendingOverlay";
+import { AlertIcon, CheckIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function TagPage({
       return (
         <main className="container stack">
           {searchParams.activated && (
-            <div className="notice">✅ Your tag is live. When someone scans it, you&apos;ll be asked to share your contact.</div>
+            <div className="notice"><CheckIcon size={15} /> Your tag is live. When someone scans it, you&apos;ll be asked to share your contact.</div>
           )}
           <div className="card">
             <div className="spread">
@@ -54,7 +55,7 @@ export default async function TagPage({
               <input type="hidden" name="id" value={tag.id} />
               <input type="hidden" name="on" value={tag.lost_mode ? "0" : "1"} />
               <button className={"btn block " + (tag.lost_mode ? "secondary" : "")} type="submit">
-                {tag.lost_mode ? "Turn OFF Lost Mode" : "🚨 Turn ON Lost Mode"}
+                {tag.lost_mode ? "Turn OFF Lost Mode" : <><AlertIcon size={16} /> Turn ON Lost Mode</>}
               </button>
             </form>
             <p className="muted small mt">
