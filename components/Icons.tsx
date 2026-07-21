@@ -69,3 +69,27 @@ export const ArrowLeftIcon = ({ className, size }: P) => (
     <path d="M19 12H5M11 5l-7 7 7 7" />
   </svg>
 );
+
+export const QrIcon = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3zM20 14v.01M14 20h3M20 17.5v2.5h-2.5" />
+  </svg>
+);
+
+export const IdCardIcon = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}>
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <circle cx="8.5" cy="10.5" r="2" />
+    <path d="M5.5 16c.5-1.8 2-3 3-3s2.5 1.2 3 3M14 9h6M14 13h6M14 17h4" />
+  </svg>
+);
+
+export const EyeIcon = ({ className, size }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12Z" />
+    <circle cx="12" cy="12" r="3.2" />
+  </svg>
+);

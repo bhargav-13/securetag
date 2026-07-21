@@ -49,6 +49,29 @@ function TagCard({ t }: { t: Tag }) {
   );
 }
 
+function LocationMap({ lat, lng }: { lat: number; lng: number }) {
+  const dLat = 0.006;
+  const dLng = 0.008;
+  const bbox = `${lng - dLng},${lat - dLat},${lng + dLng},${lat + dLat}`;
+  const embed = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  const open = `https://www.google.com/maps?q=${lat},${lng}`;
+  return (
+    <>
+      <p className="loc-coords"><PinIcon size={14} /> Scanner&apos;s location</p>
+      <div className="loc-map">
+        <iframe
+          src={embed}
+          title="Scan location"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+        <a className="loc-open" href={open} target="_blank" rel="noreferrer">Open in Maps</a>
+      </div>
+    </>
+  );
+}
+
 function RequestCard({ r }: { r: ScanReq }) {
   return (
     <div className="reqcard">
@@ -58,9 +81,7 @@ function RequestCard({ r }: { r: ScanReq }) {
       </div>
       {r.scanner_message && <p className="rc-msg">“{r.scanner_message}”</p>}
       {r.scanner_lat != null && r.scanner_lng != null && (
-        <p className="rc-loc">
-          <PinIcon size={15} /> <a href={`https://maps.google.com/?q=${r.scanner_lat},${r.scanner_lng}`} target="_blank" rel="noreferrer">Scanner&apos;s location</a>
-        </p>
+        <LocationMap lat={r.scanner_lat} lng={r.scanner_lng} />
       )}
       <div className="rc-actions">
         <form action={respondToScan}>
@@ -101,9 +122,7 @@ function HistoryRow({ r }: { r: ScanReq }) {
       <div className="muted small" style={{ marginTop: 2 }}>{new Date(r.created_at).toLocaleString()}</div>
       {r.scanner_message && <p className="rc-msg">&ldquo;{r.scanner_message}&rdquo;</p>}
       {r.scanner_lat != null && r.scanner_lng != null && (
-        <p className="rc-loc">
-          <PinIcon size={15} /> <a href={`https://maps.google.com/?q=${r.scanner_lat},${r.scanner_lng}`} target="_blank" rel="noreferrer">View location</a>
-        </p>
+        <LocationMap lat={r.scanner_lat} lng={r.scanner_lng} />
       )}
     </div>
   );
