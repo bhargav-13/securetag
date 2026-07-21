@@ -4,10 +4,13 @@ import type { NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { renderTagCardPng } from "@/lib/tagCard";
 
-const QR_LIMIT = 500;
-// Card rendering is CPU-heavy (satori + resvg per tag), so it's capped lower
-// to keep the request well within serverless execution limits.
-const CARD_LIMIT = 80;
+// Per-request caps. The client (AdminTagManager) chunks large selections into
+// batches under these limits and merges the results into one final ZIP, so
+// these exist purely as a defensive ceiling per HTTP request — a request
+// over the limit is rejected (never silently truncated) so a caller always
+// knows if something's wrong instead of quietly losing tags.
+const QR_LIMIT = 250;
+const CARD_LIMIT = 30; // card rendering is CPU-heavy (satori + resvg per tag)
 
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
@@ -22,11 +25,16 @@ export async function POST(req: NextRequest) {
   const ids = form
     .getAll("ids")
     .map((v) => String(v).trim())
-    .filter(Boolean)
-    .slice(0, limit);
+    .filter(Boolean);
 
   if (ids.length === 0) {
     return new Response("No tags selected", { status: 400 });
+  }
+  if (ids.length > limit) {
+    return new Response(
+      `Too many tags for one request (${ids.length} > ${limit}). The dashboard should batch this automatically — try again from there.`,
+      { status: 400 }
+    );
   }
 
   const base = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;

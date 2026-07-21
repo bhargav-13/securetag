@@ -2,12 +2,27 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import JSZip from "jszip";
 import type { Tag } from "@/lib/supabase/admin";
 import { DownloadIcon, ArrowRightIcon, QrIcon, IdCardIcon, CheckIcon, EyeIcon, XIcon } from "@/components/Icons";
 import ShieldMark from "@/components/ShieldMark";
 
 type DownloadStyle = "qr" | "card";
 type PreviewState = { tagId: string; style: DownloadStyle } | null;
+type Progress = { done: number; total: number } | null;
+
+// Must stay under the server's per-request caps in app/api/admin/zip/route.ts
+// (card=30, qr=250) with headroom. Large selections are split into batches of
+// this size, fetched one at a time, and merged into a single final ZIP —
+// so any number of tags can be downloaded without hitting a request timeout
+// or silently losing tags past the old hard cap.
+const BATCH_SIZE: Record<DownloadStyle, number> = { card: 20, qr: 200 };
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
 
 function PreviewModal({ preview, onClose }: { preview: NonNullable<PreviewState>; onClose: () => void }) {
   const [style, setStyle] = useState<DownloadStyle>(preview.style);
@@ -80,7 +95,12 @@ function FormatModal({
           <span className="ico"><IdCardIcon size={20} /></span>
           <span>
             <span className="t">Full card design</span>
-            <span className="d">Printable SecureTag card with logo, QR and unique ID. Takes a bit longer.</span>
+            <span className="d">
+              Printable SecureTag card with your design, QR and unique ID.
+              Each one is rendered fresh — roughly 1–2 seconds per tag, so
+              large batches (100+) can take a few minutes. No limit on how
+              many you select; you&apos;ll see live progress.
+            </span>
           </span>
         </button>
 
@@ -105,6 +125,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [downloading, setDownloading] = useState<DownloadStyle | null>(null);
+  const [progress, setProgress] = useState<Progress>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState>(null);
 
@@ -132,26 +153,63 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
     setModalOpen(false);
     setError(null);
     setDownloading(style);
+
+    const ids = Array.from(selected);
+    const batches = chunk(ids, BATCH_SIZE[style]);
+    setProgress({ done: 0, total: ids.length });
+
     try {
-      const fd = new FormData();
-      selected.forEach((id) => fd.append("ids", id));
-      fd.append("style", style);
-      const res = await fetch("/api/admin/zip", { method: "POST", body: fd });
-      if (!res.ok) throw new Error((await res.text()) || "Download failed.");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = style === "card" ? "securetag-cards.zip" : "securetag-qr-codes.zip";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      // Single batch: skip the re-zip round-trip and stream the server's
+      // ZIP straight through.
+      if (batches.length <= 1) {
+        const fd = new FormData();
+        ids.forEach((id) => fd.append("ids", id));
+        fd.append("style", style);
+        const res = await fetch("/api/admin/zip", { method: "POST", body: fd });
+        if (!res.ok) throw new Error((await res.text()) || "Download failed.");
+        const blob = await res.blob();
+        triggerDownload(blob, style);
+        setProgress({ done: ids.length, total: ids.length });
+        return;
+      }
+
+      // Multiple batches: fetch each, merge every file into one combined ZIP.
+      const combined = new JSZip();
+      let done = 0;
+      for (const batch of batches) {
+        const fd = new FormData();
+        batch.forEach((id) => fd.append("ids", id));
+        fd.append("style", style);
+        const res = await fetch("/api/admin/zip", { method: "POST", body: fd });
+        if (!res.ok) throw new Error((await res.text()) || "Download failed partway through — nothing was downloaded.");
+        const blob = await res.blob();
+        const partZip = await JSZip.loadAsync(blob);
+        for (const [filename, file] of Object.entries(partZip.files)) {
+          if (file.dir) continue;
+          combined.file(filename, await file.async("uint8array"));
+        }
+        done += batch.length;
+        setProgress({ done, total: ids.length });
+      }
+      const finalBlob = await combined.generateAsync({ type: "blob" });
+      triggerDownload(finalBlob, style);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Download failed. Please try again.");
     } finally {
       setDownloading(null);
+      setProgress(null);
     }
+  }
+
+  function triggerDownload(blob: Blob, style: DownloadStyle) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = style === "card" ? "securetag-cards.zip" : "securetag-qr-codes.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   const count = selected.size;
@@ -286,6 +344,12 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
                 {downloading === "card" ? "Generating card designs" : "Preparing ZIP"}
                 <span>.</span><span>.</span><span>.</span>
               </div>
+              {progress && progress.total > 0 && (
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+                  <span className="progress-label">{progress.done} / {progress.total}</span>
+                </div>
+              )}
             </div>
           </div>,
           document.body
