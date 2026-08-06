@@ -8,12 +8,12 @@ import { createScanRequest, attachScanLocation, type ScanResult } from "@/app/ac
 type Contact = NonNullable<ScanResult["contact"]>;
 
 const REASONS: { key: string; label: string; path: string }[] = [
-  { key: "Parking issue", label: "Parking issue", path: "M9 17H7A5 5 0 0 1 7 7h1m3 0h6a4 4 0 0 1 0 8h-2m-9 4v-9a1 1 0 0 1 1-1h3a2.5 2.5 0 0 1 0 5H8" },
-  { key: "Vehicle blocked", label: "Blocked in", path: "M5 11h14M6 11l1-5h10l1 5m-12 0v6m12-6v6M7 20h1m8 0h1" },
-  { key: "Emergency", label: "Emergency", path: "M12 2 3 20h18L12 2Zm0 6v5m0 3v.5" },
-  { key: "Accident", label: "Accident", path: "M12 2v4m0 12v4m10-10h-4M6 12H2m14.5-6.5-3 3m-5 5-3 3m11 0-3-3m-5-5-3-3" },
-  { key: "Lights / window", label: "Lights / window", path: "M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2h6c0-.8.4-1.5 1-2A7 7 0 0 0 12 2Z" },
-  { key: "Lost & found", label: "Lost & found", path: "M12 21s-7-4.4-9.5-8.5C.9 9.8 2 6 5.2 6 7 6 8.3 7 9 8c.7-1 2-2 3.8-2C16 6 17.1 9.8 15.5 12.5 13 16.6 12 21 12 21Z" },
+  { key: "Parking issue", label: "Parking issue", path: "M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z M9 17V7h4a3 3 0 0 1 0 6H9" },
+  { key: "Vehicle blocked", label: "Blocked in", path: "M12 3 6 20h12L12 3z M9 12h6 M7.5 16h9" },
+  { key: "Emergency", label: "Emergency", path: "M8 2.7h8L21.3 8v8L16 21.3H8L2.7 16V8L8 2.7z M12 8v4 M12 16h.01" },
+  { key: "Accident", label: "Accident", path: "M4 14l1.6-5A2 2 0 0 1 7.5 7.5h9a2 2 0 0 1 1.9 1.5L20 14 M4 14h16v3a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1H7.5v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3z M7.5 15h.01 M16.5 15h.01 M2 6l2 1.4 M2 9.5l2.2 .1" },
+  { key: "Lights / window", label: "Lights / window", path: "M15 5a7 7 0 0 1 0 14 M15 5H7a5 5 0 0 0 0 14h8 M18.5 8.5l3-1 M18.5 12h3 M18.5 15.5l3 1" },
+  { key: "Lost & found", label: "Lost & found", path: "M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z M9.5 10a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0" },
 ];
 
 function Icon({ path }: { path: string }) {
@@ -24,7 +24,7 @@ function Icon({ path }: { path: string }) {
   );
 }
 
-function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostMode: boolean; requestId: string }) {
+function ContactCard({ contact, lostMode, requestId, reason }: { contact: Contact; lostMode: boolean; requestId: string; reason: string | null }) {
   const [shared, setShared] = useState(false);
   const tel = contact.phone ? `tel:${contact.phone.replace(/\s+/g, "")}` : null;
   const altTel = contact.alt_phone ? `tel:${contact.alt_phone.replace(/\s+/g, "")}` : null;
@@ -33,13 +33,19 @@ function ContactCard({ contact, lostMode, requestId }: { contact: Contact; lostM
     : null;
   const dialedRef = useRef(false);
 
+  // For emergencies/accidents the owner's own line is the wrong target — they may
+  // be the person in trouble — so dial the alternate (next-of-kin) number first,
+  // then the emergency contact, and only fall back to the owner's number.
+  const urgent = reason === "Emergency" || reason === "Accident";
+  const dialTel = urgent ? altTel ?? emergencyTel ?? tel : tel;
+
   // Owner approved — open the dialer immediately, no extra tap needed.
   useEffect(() => {
-    if (tel && !dialedRef.current) {
+    if (dialTel && !dialedRef.current) {
       dialedRef.current = true;
-      window.location.href = tel;
+      window.location.href = dialTel;
     }
-  }, [tel]);
+  }, [dialTel]);
 
   function shareLocation() {
     if (!navigator.geolocation) return;
@@ -181,7 +187,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
   }
 
   if (phase === "accepted" && contact) {
-    return <ContactCard contact={contact} lostMode={lostMode} requestId={requestId} />;
+    return <ContactCard contact={contact} lostMode={lostMode} requestId={requestId} reason={reason} />;
   }
 
   if (phase === "declined") {
