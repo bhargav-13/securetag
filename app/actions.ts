@@ -166,6 +166,78 @@ export async function setLostMode(formData: FormData) {
   revalidatePath(`/tag/${id}`);
 }
 
+/* -------------------- LEGACY items (app.securetag.in /found) --------------------
+   Old pre-2024 tags live in `legacy_tags` with the owner's email denormalized
+   on the row (owners weren't migrated from Cognito). We authorize a logged-in
+   user against a legacy item purely by VERIFIED EMAIL match: the session
+   user's email must equal the row's email (case-insensitive). Email + id are
+   never editable, so a user can only ever act on their own rows. */
+
+async function assertLegacyOwner(code: string, userEmail: string) {
+  const db = getAdminClient();
+  const { data: row } = await db
+    .from("legacy_tags")
+    .select("id, email, claimed")
+    .eq("id", code)
+    .maybeSingle();
+  if (!row || !row.claimed || !row.email) return null;
+  if (row.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()) return null;
+  return row;
+}
+
+/** Owner toggles Lost Mode for one of their legacy items. */
+export async function setLegacyLostMode(formData: FormData) {
+  const user = await getSessionUser();
+  if (!user) return;
+  const code = String(formData.get("code") || "").trim();
+  const on = String(formData.get("on") || "") === "1";
+
+  const row = await assertLegacyOwner(code, user.email);
+  if (!row) return;
+
+  const db = getAdminClient();
+  await db.from("legacy_tags").update({ lost_mode: on }).eq("id", code);
+  revalidatePath("/dashboard");
+}
+
+/** Owner edits the contact details on one of their legacy items. */
+export async function updateLegacyItem(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getSessionUser();
+  const code = String(formData.get("code") || "").trim();
+  if (!user) redirect(`/login?next=/dashboard/legacy-item/${code}/edit`);
+
+  const row = await assertLegacyOwner(code, user!.email);
+  if (!row) return { error: "You are not the owner of this item." };
+
+  const item_name = String(formData.get("item_name") || "").trim();
+  const owner_name = String(formData.get("owner_name") || "").trim();
+  const phone = String(formData.get("phone") || "").trim();
+  const alt_phone = String(formData.get("alt_phone") || "").trim();
+  const message = String(formData.get("message") || "").trim();
+  const address = String(formData.get("address") || "").trim();
+  const pref_contact = String(formData.get("pref_contact") || "").trim().toUpperCase();
+
+  if (!owner_name || !phone) return { error: "Name and phone number are required." };
+
+  const db = getAdminClient();
+  const { error } = await db
+    .from("legacy_tags")
+    .update({
+      item_name: item_name || null,
+      owner_name,
+      phone,
+      alt_phone: alt_phone || null,
+      message: message || null,
+      address: address || null,
+      pref_contact: pref_contact || null,
+    })
+    .eq("id", code);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}
+
 /** Admin: generate a batch of new unregistered tags. */
 export async function generateTags(_prev: FormState, formData: FormData): Promise<FormState> {
   const admin = await requireAdmin();

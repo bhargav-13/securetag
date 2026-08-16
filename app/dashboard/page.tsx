@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { getAdminClient, type Tag } from "@/lib/supabase/admin";
-import { respondToScan, setLostMode } from "@/app/actions";
+import { respondToScan, setLostMode, setLegacyLostMode } from "@/app/actions";
 import AdminTagManager from "./AdminTagManager";
 import AdminTabs from "@/components/AdminTabs";
 import GenerateForm from "./GenerateForm";
@@ -40,6 +40,48 @@ function TagCard({ t }: { t: Tag }) {
         <form action={setLostMode}>
           <PendingOverlay label={t.lost_mode ? "Turning off Lost Mode" : "Turning on Lost Mode"} />
           <input type="hidden" name="id" value={t.id} />
+          <input type="hidden" name="on" value={t.lost_mode ? "0" : "1"} />
+          <button className={"btn chip-btn " + (t.lost_mode ? "secondary" : "")} type="submit">
+            {t.lost_mode ? "End Lost" : <><AlertIcon size={15} /> Lost</>}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type LegacyItem = {
+  id: string;
+  item_name: string | null;
+  owner_name: string | null;
+  phone: string | null;
+  alt_phone: string | null;
+  message: string | null;
+  address: string | null;
+  pref_contact: string | null;
+  lost_mode: boolean;
+  claimed: boolean;
+  email: string | null;
+};
+
+const LEGACY_ORIGIN = "https://app.securetag.in";
+
+function LegacyItemCard({ t }: { t: LegacyItem }) {
+  return (
+    <div className="tagcard">
+      <div className="tc-top">
+        <div>
+          <div className="tc-title">{t.item_name || "Legacy item"}</div>
+          <div className="tc-meta"><span className="tc-code">{t.id}</span> · app.securetag.in</div>
+        </div>
+        {t.lost_mode ? <span className="pill amber">Lost</span> : <span className="pill green">Secured</span>}
+      </div>
+      <div className="tc-actions">
+        <a href={`${LEGACY_ORIGIN}/found/${t.id}`} target="_blank" rel="noopener noreferrer" className="btn secondary chip-btn">View</a>
+        <Link href={`/dashboard/legacy-item/${t.id}/edit`} className="btn ghost chip-btn">Edit</Link>
+        <form action={setLegacyLostMode}>
+          <PendingOverlay label={t.lost_mode ? "Turning off Lost Mode" : "Turning on Lost Mode"} />
+          <input type="hidden" name="code" value={t.id} />
           <input type="hidden" name="on" value={t.lost_mode ? "0" : "1"} />
           <button className={"btn chip-btn " + (t.lost_mode ? "secondary" : "")} type="submit">
             {t.lost_mode ? "End Lost" : <><AlertIcon size={15} /> Lost</>}
@@ -150,6 +192,17 @@ export default async function Dashboard({
   ]);
   const tags = (tagsData as Tag[]) ?? [];
   const allScans = (reqData as ScanReq[]) ?? [];
+
+  // Legacy items are matched by the owner's VERIFIED email (old tags weren't
+  // migrated to accounts). Filter case-insensitively server-side; only this
+  // user's own rows are ever passed to the client.
+  const { data: legacyData } = await db
+    .from("legacy_tags")
+    .select("id,item_name,owner_name,phone,alt_phone,message,address,pref_contact,lost_mode,claimed,email")
+    .ilike("email", user.email);
+  const legacyItems = ((legacyData as LegacyItem[]) ?? []).filter(
+    (r) => r.claimed && r.email?.trim().toLowerCase() === user.email.trim().toLowerCase()
+  );
   const pending = allScans.filter((s) => s.status === "pending");
   const activeCount = tags.filter((t) => !t.lost_mode).length;
   const lostCount = tags.filter((t) => t.lost_mode).length;
@@ -188,6 +241,18 @@ export default async function Dashboard({
           </div>
         )}
       </div>
+
+      {legacyItems.length > 0 && (
+        <div>
+          <div className="section-head">
+            <h2>Legacy items <span className="pill brand">app.securetag.in</span></h2>
+            <span className="cnt">{legacyItems.length} total</span>
+          </div>
+          <div className="tag-grid">
+            {legacyItems.map((t) => <LegacyItemCard key={t.id} t={t} />)}
+          </div>
+        </div>
+      )}
 
       {allScans.length > 0 && (
         <div>
