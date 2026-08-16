@@ -685,3 +685,33 @@ html { scroll-behavior: smooth; }
 .format-opt .t { font-weight: 700; font-size: 14.5px; }
 .format-opt .d { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+
+/* ---------- admin section tabs (vehicle / legacy) ---------- */
+.admin-tabs { display: flex; gap: 8px; margin: 4px 0 18px; border-bottom: 1px solid var(--border); }
+.admin-tab {
+  padding: 10px 16px; font-weight: 700; font-size: 14px; color: var(--muted);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.admin-tab:hover { color: var(--brand-ink); }
+.admin-tab.sel { color: var(--brand); border-bottom-color: var(--brand); }
+
+/* ---------- legacy table controls ---------- */
+.legacy-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.legacy-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.legacy-filters .seg {
+  padding: 7px 12px; border: 1px solid var(--border); background: #fff;
+  border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.legacy-filters .seg.sel { border-color: var(--brand); background: #eceafd; color: var(--brand-ink); }
+.legacy-filters .seg .seg-n { opacity: .6; margin-left: 4px; }
+.legacy-search {
+  flex: 1; min-width: 220px; padding: 9px 13px; border: 1px solid var(--border);
+  border-radius: 9px; font-size: 14px;
+}
+.legacy-count { color: var(--muted); font-size: 12.5px; margin: 6px 0 10px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll .utable td code { font-weight: 700; }
+.table-scroll .utable a { color: var(--brand); text-decoration: none; }

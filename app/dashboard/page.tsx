@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getAdminClient, type Tag } from "@/lib/supabase/admin";
 import { respondToScan, setLostMode } from "@/app/actions";
 import AdminTagManager from "./AdminTagManager";
+import AdminTabs from "@/components/AdminTabs";
 import GenerateForm from "./GenerateForm";
 import RealtimeNotifier from "./RealtimeNotifier";
 import PendingOverlay from "@/components/PendingOverlay";
@@ -218,6 +219,8 @@ export default async function Dashboard({
           </div>
           <Link href="/dashboard/users" className="btn secondary small">Manage users</Link>
         </div>
+
+        <AdminTabs active="vehicle" />
 
         <div className="stat-row">
           <div className="stat-tile brand"><div className="n">{allTags.length}</div><div className="l">Total tags</div></div>

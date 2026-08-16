@@ -21,6 +21,12 @@
       "runtimeArgs": ["next", "start", "-p", "3210"],
       "port": 3210,
       "autoPort": true
+    },
+    {
+      "name": "securetag-legacy",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d D:\\securetag-legacy && npm run dev"],
+      "port": 3200
     }
   ]
 }
