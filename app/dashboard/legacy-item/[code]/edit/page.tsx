@@ -17,7 +17,7 @@ export default async function LegacyEditPage({
   const db = getAdminClient();
   const { data } = await db
     .from("legacy_tags")
-    .select("id,item_name,owner_name,phone,alt_phone,message,address,pref_contact,email,claimed")
+    .select("id,item_name,item_type,owner_name,phone,alt_phone,message,address,pref_contact,email,claimed")
     .eq("id", params.code)
     .maybeSingle();
   if (!data) notFound();
@@ -34,7 +34,7 @@ export default async function LegacyEditPage({
       <div className="card">
         <h1>Edit legacy item</h1>
         <p className="muted" style={{ marginTop: 0 }}>
-          Served at <code>app.securetag.in/found/{item.id}</code>
+          Tag ID <code>{item.id}</code>
         </p>
         {!owns ? (
           <p className="error">This item isn&apos;t linked to your account&apos;s email.</p>

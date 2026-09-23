@@ -3,10 +3,12 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { updateLegacyItem, type FormState } from "@/app/actions";
 import PendingOverlay from "@/components/PendingOverlay";
+import { ITEM_TYPES } from "@/lib/legacy";
 
 export type LegacyEditable = {
   id: string;
   item_name: string | null;
+  item_type: string | null;
   owner_name: string | null;
   phone: string | null;
   alt_phone: string | null;
@@ -43,6 +45,15 @@ export default function LegacyEditForm({ item }: { item: LegacyEditable }) {
           <label htmlFor="owner_name">Your name *</label>
           <input id="owner_name" name="owner_name" required defaultValue={item.owner_name ?? ""} />
         </div>
+      </div>
+
+      <div className="field-group" style={{ marginTop: 14 }}>
+        <label htmlFor="item_type">Tag is on a…</label>
+        <select id="item_type" name="item_type" defaultValue={item.item_type && ITEM_TYPES[item.item_type] ? item.item_type : "OTHER"}>
+          {Object.entries(ITEM_TYPES).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
       </div>
 
       <div className="frow cols-2" style={{ marginTop: 14 }}>

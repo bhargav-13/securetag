@@ -1,0 +1,78 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { getSessionUser } from "@/lib/auth";
+import { LEGACY_CODE_RE } from "@/lib/legacy";
+import LegacyClaimForm from "./LegacyClaimForm";
+
+export const dynamic = "force-dynamic";
+
+/* Activation for a blank legacy code — the old app's /activate/<code> →
+   sign in / register → /tags/add flow. The legacy /found page sends blank
+   codes here; the item is then linked to the owner's verified email. */
+export default async function LegacyActivatePage({ params }: { params: { code: string } }) {
+  const code = params.code;
+  if (!LEGACY_CODE_RE.test(code)) notFound();
+
+  const db = getAdminClient();
+  const { data: tag } = await db
+    .from("legacy_tags")
+    .select("id, claimed, email")
+    .eq("id", code)
+    .maybeSingle();
+  if (!tag) notFound();
+
+  const user = await getSessionUser();
+
+  if (tag.claimed) {
+    const owns = !!user && !!tag.email && tag.email.trim().toLowerCase() === user.email.trim().toLowerCase();
+    return (
+      <main className="container">
+        <div className="card center stack">
+          <span className="pill green">Already active</span>
+          <h1>This tag is already activated</h1>
+          {owns ? (
+            <Link href={`/dashboard/legacy-item/${code}/edit`} className="btn block lg">Edit this item</Link>
+          ) : (
+            <p className="muted">
+              It&apos;s linked to another account. If you think this is a mistake, write to support@securetag.in.
+            </p>
+          )}
+          <p className="muted small">Tag ID: {code}</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    const next = encodeURIComponent(`/legacy/activate/${code}`);
+    return (
+      <main className="container">
+        <div className="card center stack">
+          <span className="pill amber">New tag</span>
+          <h1>Activate your new tag</h1>
+          <p className="muted">
+            This SecureTag isn&apos;t activated yet. Log in or create an account to link it to your item.
+          </p>
+          <Link href={`/register?next=${next}`} className="btn block lg">Register &amp; activate</Link>
+          <Link href={`/login?next=${next}`} className="btn secondary block">I already have an account</Link>
+          <p className="muted small">Tag ID: {code}</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container">
+      <div className="card">
+        <span className="pill amber">New tag</span>
+        <h1 style={{ marginTop: 12 }}>Activate your tag</h1>
+        <p className="muted">
+          Tell us what this tag is on. A finder sees your contact details only when you mark the item as Lost.
+        </p>
+        <LegacyClaimForm code={code} email={user.email} />
+        <p className="muted small center mt">Tag ID: {code}</p>
+      </div>
+    </main>
+  );
+}

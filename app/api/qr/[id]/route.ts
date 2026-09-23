@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import type { NextRequest } from "next/server";
+import { legacyQrUrl } from "@/lib/legacy";
 
 export async function GET(
   req: NextRequest,
@@ -7,7 +8,8 @@ export async function GET(
 ) {
   const base =
     process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
-  const target = `${base}/tag/${params.id}`;
+  const legacy = !!req.nextUrl.searchParams.get("legacy");
+  const target = legacy ? legacyQrUrl(base, params.id) : `${base}/tag/${params.id}`;
 
   const png = await QRCode.toBuffer(target, {
     margin: 1,

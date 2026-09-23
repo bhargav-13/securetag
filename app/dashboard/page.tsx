@@ -9,6 +9,7 @@ import GenerateForm from "./GenerateForm";
 import RealtimeNotifier from "./RealtimeNotifier";
 import PendingOverlay from "@/components/PendingOverlay";
 import { PinIcon, CheckIcon, AlertIcon } from "@/components/Icons";
+import { LEGACY_ORIGIN, itemTypeLabel } from "@/lib/legacy";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ function TagCard({ t }: { t: Tag }) {
 type LegacyItem = {
   id: string;
   item_name: string | null;
+  item_type: string | null;
   owner_name: string | null;
   phone: string | null;
   alt_phone: string | null;
@@ -64,7 +66,6 @@ type LegacyItem = {
   email: string | null;
 };
 
-const LEGACY_ORIGIN = "https://app.securetag.in";
 
 function LegacyItemCard({ t }: { t: LegacyItem }) {
   return (
@@ -72,7 +73,7 @@ function LegacyItemCard({ t }: { t: LegacyItem }) {
       <div className="tc-top">
         <div>
           <div className="tc-title">{t.item_name || "Legacy item"}</div>
-          <div className="tc-meta"><span className="tc-code">{t.id}</span> · app.securetag.in</div>
+          <div className="tc-meta"><span className="tc-code">{t.id}</span>{t.item_type ? ` · ${itemTypeLabel(t.item_type)}` : ""}</div>
         </div>
         {t.lost_mode ? <span className="pill amber">Lost</span> : <span className="pill green">Secured</span>}
       </div>
@@ -174,7 +175,7 @@ function HistoryRow({ r }: { r: ScanReq }) {
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: { created?: string };
+  searchParams: { created?: string; legacy_activated?: string };
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/dashboard");
@@ -198,7 +199,7 @@ export default async function Dashboard({
   // user's own rows are ever passed to the client.
   const { data: legacyData } = await db
     .from("legacy_tags")
-    .select("id,item_name,owner_name,phone,alt_phone,message,address,pref_contact,lost_mode,claimed,email")
+    .select("id,item_name,item_type,owner_name,phone,alt_phone,message,address,pref_contact,lost_mode,claimed,email")
     .ilike("email", user.email);
   const legacyItems = ((legacyData as LegacyItem[]) ?? []).filter(
     (r) => r.claimed && r.email?.trim().toLowerCase() === user.email.trim().toLowerCase()
@@ -210,6 +211,12 @@ export default async function Dashboard({
   const ownerBody = (
     <>
       <RealtimeNotifier userId={user.id} />
+
+      {searchParams.legacy_activated && (
+        <div className="notice">
+          <CheckIcon size={15} /> Tag {searchParams.legacy_activated} is active. Turn on Lost Mode below if the item goes missing.
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div>
@@ -245,7 +252,7 @@ export default async function Dashboard({
       {legacyItems.length > 0 && (
         <div>
           <div className="section-head">
-            <h2>Legacy items <span className="pill brand">app.securetag.in</span></h2>
+            <h2>My items <span className="pill brand">luggage, wallets &amp; more</span></h2>
             <span className="cnt">{legacyItems.length} total</span>
           </div>
           <div className="tag-grid">

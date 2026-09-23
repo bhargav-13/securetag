@@ -7,12 +7,13 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionUser, requireAdmin } from "@/lib/auth";
 import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
+import { ITEM_TYPES, LEGACY_ALPHABET, LEGACY_CODE_RE } from "@/lib/legacy";
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function shortCode(len = 8) {
+function shortCode(len = 8, alphabet = ALPHABET) {
   const bytes = crypto.randomBytes(len);
   let out = "";
-  for (let i = 0; i < len; i++) out += ALPHABET[bytes[i] % ALPHABET.length];
+  for (let i = 0; i < len; i++) out += alphabet[bytes[i] % alphabet.length];
   return out;
 }
 
@@ -210,6 +211,7 @@ export async function updateLegacyItem(_prev: FormState, formData: FormData): Pr
   if (!row) return { error: "You are not the owner of this item." };
 
   const item_name = String(formData.get("item_name") || "").trim();
+  const item_type = String(formData.get("item_type") || "").trim();
   const owner_name = String(formData.get("owner_name") || "").trim();
   const phone = String(formData.get("phone") || "").trim();
   const alt_phone = String(formData.get("alt_phone") || "").trim();
@@ -224,6 +226,7 @@ export async function updateLegacyItem(_prev: FormState, formData: FormData): Pr
     .from("legacy_tags")
     .update({
       item_name: item_name || null,
+      ...(ITEM_TYPES[item_type] ? { item_type } : {}),
       owner_name,
       phone,
       alt_phone: alt_phone || null,
@@ -236,6 +239,106 @@ export async function updateLegacyItem(_prev: FormState, formData: FormData): Pr
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/** Owner activates a blank legacy code (the old /tags/add flow). The row is
+    linked to them by their verified account email, same as migrated owners. */
+export async function claimLegacyTag(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await getSessionUser();
+  const code = String(formData.get("code") || "").trim();
+  if (!user) redirect(`/login?next=/legacy/activate/${code}`);
+  if (!LEGACY_CODE_RE.test(code)) return { error: "Invalid tag code." };
+
+  const val = (k: string) => String(formData.get(k) || "").trim();
+  const item_name = val("item_name");
+  const item_type = val("item_type");
+  const owner_name = val("owner_name");
+  const phone = val("phone");
+  const alt_phone = val("alt_phone");
+  const message = val("message");
+  const street = val("street");
+  const city = val("city");
+  const state = val("state");
+  const postal = val("postal_code");
+  const country = val("country");
+  const pref = formData.getAll("pref_contact").map((v) => String(v).toUpperCase()).filter((v) => v === "PHONE" || v === "EMAIL");
+
+  if (!item_name) return { error: "Give your item a name." };
+  if (!ITEM_TYPES[item_type]) return { error: "Choose what the tag is attached to." };
+  if (!owner_name || !phone) return { error: "Name and phone number are required." };
+  if (pref.length === 0) return { error: "Choose at least one way a finder can contact you." };
+
+  const db = getAdminClient();
+  const { data: tag } = await db.from("legacy_tags").select("id, claimed").eq("id", code).maybeSingle();
+  if (!tag) return { error: "Invalid tag — this code does not exist." };
+  if (tag.claimed) return { error: "This tag is already activated." };
+
+  // Same shape the importer produced: full address string + split columns.
+  const address = [street, city, state, postal, country].filter(Boolean).join(", ");
+
+  const { data: updated, error } = await db
+    .from("legacy_tags")
+    .update({
+      claimed: true,
+      email: user!.email.trim().toLowerCase(),
+      item_name,
+      item_type,
+      owner_name,
+      phone,
+      alt_phone: alt_phone || null,
+      message: message || null,
+      address: address || null,
+      city: city || null,
+      state: state || null,
+      country: country || null,
+      pref_contact: pref.join(","),
+      lost_mode: false,
+      status_raw: "AVAILABLE",
+    })
+    .eq("id", code)
+    .eq("claimed", false)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!updated || updated.length === 0) return { error: "This tag is already activated." };
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?legacy_activated=${code}`);
+}
+
+/** Admin: generate a batch of blank legacy codes (6-char, case-sensitive).
+    Every row in a batch shares one `imported_at`, which is how batches are
+    grouped in the admin panel. */
+export async function generateLegacyTags(_prev: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  if (!admin) return { error: "Not authorized." };
+
+  const count = Math.min(Math.max(parseInt(String(formData.get("count") || "1"), 10) || 1, 1), 500);
+  const db = getAdminClient();
+
+  // Existing ids, compared case-insensitively so a new code can never differ
+  // from an old one only by letter case (hard to tell apart when printed).
+  const taken = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("legacy_tags").select("id").range(from, from + 999);
+    if (error) return { error: error.message };
+    data.forEach((r) => taken.add(String(r.id).toLowerCase()));
+    if (data.length < 1000) break;
+  }
+
+  const batchAt = new Date().toISOString();
+  const rows: { id: string; claimed: boolean; url_prefix: string; imported_at: string }[] = [];
+  while (rows.length < count) {
+    const id = shortCode(6, LEGACY_ALPHABET);
+    if (taken.has(id.toLowerCase())) continue;
+    taken.add(id.toLowerCase());
+    rows.push({ id, claimed: false, url_prefix: "https://securetag.in/found", imported_at: batchAt });
+  }
+
+  const { error } = await db.from("legacy_tags").insert(rows);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/legacy");
+  redirect(`/dashboard/legacy?batch=${encodeURIComponent(batchAt)}`);
 }
 
 /** Admin: generate a batch of new unregistered tags. */

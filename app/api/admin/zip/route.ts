@@ -2,7 +2,8 @@ import JSZip from "jszip";
 import QRCode from "qrcode";
 import type { NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { renderTagCardPng } from "@/lib/tagCard";
+import { renderLegacyLabelPng, renderTagCardPng } from "@/lib/tagCard";
+import { legacyQrUrl } from "@/lib/legacy";
 
 // Per-request caps. The client (AdminTagManager) chunks large selections into
 // batches under these limits and merges the results into one final ZIP, so
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData();
   const style = String(form.get("style") || "qr") === "card" ? "card" : "qr";
+  // kind=legacy → codes from legacy_tags: QR points at /found/<code>, and
+  // "card" is the plain QR + code label (the vehicle card design doesn't apply).
+  const legacy = String(form.get("kind") || "") === "legacy";
   const limit = style === "card" ? CARD_LIMIT : QR_LIMIT;
 
   const ids = form
@@ -40,12 +44,18 @@ export async function POST(req: NextRequest) {
   const base = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
   const zip = new JSZip();
 
+  const csv = ["code,url"];
+
   for (const id of ids) {
+    const targetUrl = legacy ? legacyQrUrl(base, id) : `${base}/tag/${id}`;
+    csv.push(`${id},${targetUrl}`);
     if (style === "card") {
-      const png = await renderTagCardPng({ id, targetUrl: `${base}/tag/${id}` });
-      zip.file(`securetag-card-${id}.png`, png);
+      const png = legacy
+        ? await renderLegacyLabelPng({ id, targetUrl })
+        : await renderTagCardPng({ id, targetUrl });
+      zip.file(`securetag-${legacy ? "label" : "card"}-${id}.png`, png);
     } else {
-      const png = await QRCode.toBuffer(`${base}/tag/${id}`, {
+      const png = await QRCode.toBuffer(targetUrl, {
         margin: 1,
         width: 512,
         type: "png",
@@ -55,8 +65,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Legacy codes are case-sensitive: ship the exact list alongside the images.
+  if (legacy) zip.file("codes.csv", csv.join("\n") + "\n");
+
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
-  const filename = style === "card" ? "securetag-cards.zip" : "securetag-qr-codes.zip";
+  const filename = legacy
+    ? style === "card" ? "securetag-legacy-labels.zip" : "securetag-legacy-qr-codes.zip"
+    : style === "card" ? "securetag-cards.zip" : "securetag-qr-codes.zip";
 
   return new Response(new Uint8Array(buffer), {
     headers: {

@@ -8,6 +8,14 @@ import { DownloadIcon, ArrowRightIcon, QrIcon, IdCardIcon, CheckIcon, EyeIcon, X
 import ShieldMark from "@/components/ShieldMark";
 
 type DownloadStyle = "qr" | "card";
+/** "legacy" = codes from legacy_tags: QR → /found/<code>, and the "design"
+ *  format is a plain QR + code label instead of the vehicle card. */
+type Kind = "vehicle" | "legacy";
+type ManagedTag = Pick<Tag, "id" | "claimed" | "owner_name" | "phone">;
+
+const qrSrc = (kind: Kind, id: string) => `/api/qr/${id}${kind === "legacy" ? "?legacy=1" : ""}`;
+const cardSrc = (kind: Kind, id: string) => `/api/tag-card/${id}${kind === "legacy" ? "?legacy=1" : ""}`;
+const withParam = (src: string, p: string) => src + (src.includes("?") ? "&" : "?") + p;
 type PreviewState = { tagId: string; style: DownloadStyle } | null;
 type Progress = { done: number; total: number } | null;
 
@@ -24,10 +32,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function PreviewModal({ preview, onClose }: { preview: NonNullable<PreviewState>; onClose: () => void }) {
+function PreviewModal({ preview, kind, onClose }: { preview: NonNullable<PreviewState>; kind: Kind; onClose: () => void }) {
   const [style, setStyle] = useState<DownloadStyle>(preview.style);
-  const src = style === "card" ? `/api/tag-card/${preview.tagId}` : `/api/qr/${preview.tagId}`;
-  const downloadHref = `${src}?download=1`;
+  const src = style === "card" ? cardSrc(kind, preview.tagId) : qrSrc(kind, preview.tagId);
+  const downloadHref = withParam(src, "download=1");
+  const designLabel = kind === "legacy" ? "with code label" : "with design";
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -44,7 +53,7 @@ function PreviewModal({ preview, onClose }: { preview: NonNullable<PreviewState>
             <QrIcon size={15} /> Without design
           </button>
           <button type="button" className={"seg" + (style === "card" ? " sel" : "")} onClick={() => setStyle("card")}>
-            <IdCardIcon size={15} /> With design
+            <IdCardIcon size={15} /> {kind === "legacy" ? "With code label" : "With design"}
           </button>
         </div>
 
@@ -54,7 +63,7 @@ function PreviewModal({ preview, onClose }: { preview: NonNullable<PreviewState>
         </div>
         <div className="preview-foot">
           <a className="btn secondary block" href={downloadHref}>
-            <DownloadIcon size={16} /> Download this one ({style === "card" ? "with design" : "without design"})
+            <DownloadIcon size={16} /> Download this one ({style === "card" ? designLabel : "QR only"})
           </a>
         </div>
       </div>
@@ -63,12 +72,14 @@ function PreviewModal({ preview, onClose }: { preview: NonNullable<PreviewState>
 }
 
 function FormatModal({
+  kind,
   count,
   sampleId,
   onCancel,
   onConfirm,
   onPreview,
 }: {
+  kind: Kind;
   count: number;
   sampleId: string | null;
   onCancel: () => void;
@@ -94,13 +105,26 @@ function FormatModal({
         <button type="button" className={"format-opt" + (style === "card" ? " sel" : "")} onClick={() => setStyle("card")}>
           <span className="ico"><IdCardIcon size={20} /></span>
           <span>
-            <span className="t">Full card design</span>
-            <span className="d">
-              Printable SecureTag card with your design, QR and unique ID.
-              Each one is rendered fresh — roughly 1–2 seconds per tag, so
-              large batches (100+) can take a few minutes. No limit on how
-              many you select; you&apos;ll see live progress.
-            </span>
+            {kind === "legacy" ? (
+              <>
+                <span className="t">QR + code label</span>
+                <span className="d">
+                  The QR with its case-sensitive code printed underneath, ready
+                  for the printer to place on your artwork. Rendered fresh —
+                  roughly 1 second per tag.
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="t">Full card design</span>
+                <span className="d">
+                  Printable SecureTag card with your design, QR and unique ID.
+                  Each one is rendered fresh — roughly 1–2 seconds per tag, so
+                  large batches (100+) can take a few minutes. No limit on how
+                  many you select; you&apos;ll see live progress.
+                </span>
+              </>
+            )}
           </span>
         </button>
 
@@ -121,8 +145,16 @@ function FormatModal({
   );
 }
 
-export default function AdminTagManager({ tags }: { tags: Tag[] }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+export default function AdminTagManager({
+  tags,
+  kind = "vehicle",
+  initialSelected,
+}: {
+  tags: ManagedTag[];
+  kind?: Kind;
+  initialSelected?: string[];
+}) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected ?? []));
   const [modalOpen, setModalOpen] = useState(false);
   const [downloading, setDownloading] = useState<DownloadStyle | null>(null);
   const [progress, setProgress] = useState<Progress>(null);
@@ -165,6 +197,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
         const fd = new FormData();
         ids.forEach((id) => fd.append("ids", id));
         fd.append("style", style);
+        fd.append("kind", kind);
         const res = await fetch("/api/admin/zip", { method: "POST", body: fd });
         if (!res.ok) throw new Error((await res.text()) || "Download failed.");
         const blob = await res.blob();
@@ -180,6 +213,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
         const fd = new FormData();
         batch.forEach((id) => fd.append("ids", id));
         fd.append("style", style);
+        fd.append("kind", kind);
         const res = await fetch("/api/admin/zip", { method: "POST", body: fd });
         if (!res.ok) throw new Error((await res.text()) || "Download failed partway through — nothing was downloaded.");
         const blob = await res.blob();
@@ -205,7 +239,8 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = style === "card" ? "securetag-cards.zip" : "securetag-qr-codes.zip";
+    const prefix = kind === "legacy" ? "securetag-legacy" : "securetag";
+    a.download = style === "card" ? `${prefix}-${kind === "legacy" ? "labels" : "cards"}.zip` : `${prefix}-qr-codes.zip`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -273,7 +308,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
                 </button>
                 <a
                   className="icon-btn"
-                  href={`/api/qr/${t.id}?download=1`}
+                  href={withParam(qrSrc(kind, t.id), "download=1")}
                   title="Download PNG"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -282,7 +317,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
               </div>
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/qr/${t.id}`} alt={`QR ${t.id}`} loading="lazy" />
+              <img src={qrSrc(kind, t.id)} alt={`QR ${t.id}`} loading="lazy" />
               <div className="code">{t.id}</div>
               <div style={{ marginTop: 6 }}>
                 {t.claimed ? (
@@ -299,7 +334,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
               <div style={{ marginTop: 6 }}>
                 <a
                   className="small"
-                  href={`/tag/${t.id}`}
+                  href={kind === "legacy" ? `/found/${t.id}` : `/tag/${t.id}`}
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -316,6 +351,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
         typeof document !== "undefined" &&
         createPortal(
           <FormatModal
+            kind={kind}
             count={count}
             sampleId={sampleId}
             onCancel={() => setModalOpen(false)}
@@ -329,7 +365,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
 
       {preview &&
         typeof document !== "undefined" &&
-        createPortal(<PreviewModal preview={preview} onClose={() => setPreview(null)} />, document.body)}
+        createPortal(<PreviewModal preview={preview} kind={kind} onClose={() => setPreview(null)} />, document.body)}
 
       {downloading &&
         typeof document !== "undefined" &&
@@ -341,7 +377,7 @@ export default function AdminTagManager({ tags }: { tags: Tag[] }) {
                 <span className="scan" />
               </div>
               <div className="txt">
-                {downloading === "card" ? "Generating card designs" : "Preparing ZIP"}
+                {downloading === "card" ? (kind === "legacy" ? "Generating labels" : "Generating card designs") : "Preparing ZIP"}
                 <span>.</span><span>.</span><span>.</span>
               </div>
               {progress && progress.total > 0 && (

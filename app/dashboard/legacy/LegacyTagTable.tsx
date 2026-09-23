@@ -16,6 +16,7 @@ export type LegacyRow = {
   lost_mode: boolean;
   status_raw: string | null;
   url_prefix: string | null;
+  imported_at: string;
 };
 
 type Filter = "registered" | "lost" | "blank" | "all";

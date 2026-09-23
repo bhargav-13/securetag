@@ -124,3 +124,39 @@ export async function renderTagCardPng(input: TagCardInput): Promise<Buffer> {
   const png = resvg.render();
   return png.asPng();
 }
+
+// ---- Legacy (generic item) label: QR with its case-sensitive code below ----
+const LABEL_W = 600;
+const LABEL_H = 720;
+
+/** Renders a plain printable label for a legacy code — the old system's
+ * "QR + code text" output. The item artwork is applied by the printer. */
+export async function renderLegacyLabelPng(input: TagCardInput): Promise<Buffer> {
+  const qrDataUrl = await QRCode.toDataURL(input.targetUrl, {
+    margin: 0,
+    width: 800,
+    color: { dark: "#191b2e", light: "#ffffff" },
+  });
+  const tree = (
+    <div
+      style={{
+        width: LABEL_W,
+        height: LABEL_H,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#ffffff",
+        fontFamily: "Inter",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={qrDataUrl} width={500} height={500} />
+      <span style={{ marginTop: 34, fontSize: 64, fontWeight: 800, color: ID_NAVY, letterSpacing: 6 }}>{input.id}</span>
+      <span style={{ marginTop: 6, fontSize: 24, fontWeight: 500, color: "#5b6180" }}>securetag.in</span>
+    </div>
+  );
+  const svg = await satori(tree, { width: LABEL_W, height: LABEL_H, fonts: loadFonts() });
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: LABEL_W * 2 } });
+  return resvg.render().asPng();
+}
