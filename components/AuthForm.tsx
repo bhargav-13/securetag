@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useFormState } from "react-dom";
 import { signInAction, signUpAction } from "@/app/actions";
 import type { FormState } from "@/lib/forms";
-import { FormShell, PasswordField, SubmitBar, TextField } from "@/components/form";
+import { FormShell, PasswordField, PhoneField, Row, SubmitBar, TextField } from "@/components/form";
 
 export default function AuthForm({
   mode,
@@ -23,6 +23,12 @@ export default function AuthForm({
     <FormShell action={formAction} state={state} pendingLabel={mode === "login" ? "Signing you in" : "Creating your account"}>
       <input type="hidden" name="next" value={next} />
 
+      {mode === "register" && (
+        <Row>
+          <TextField name="full_name" label="Full name" required autoComplete="name" placeholder="Your name" maxLength={80} />
+          <PhoneField name="phone" label="Mobile number" required hint="Pre-fills your tags. Indian numbers get +91." />
+        </Row>
+      )}
       <TextField name="email" label="Email" type="email" required autoComplete="email" placeholder="you@example.com" />
       <PasswordField
         name="password"

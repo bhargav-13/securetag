@@ -36,14 +36,17 @@ export default function LegacyItemForm({
   code,
   email,
   item,
+  prefill,
 }: {
   mode: "claim" | "edit";
   code: string;
   email: string;
   item?: LegacyItemValues;
+  /** Account name/phone, used when activating a new tag. */
+  prefill?: { owner_name?: string | null; phone?: string | null };
 }) {
   const [state, action] = useFormState<FormState, FormData>(mode === "claim" ? claimLegacyTag : updateLegacyItem, undefined);
-  const initial = item ?? { country: "India" };
+  const initial = item ?? { country: "India", ...prefill };
 
   return (
     <FormShell

@@ -52,9 +52,11 @@ export default async function LegacyActivatePage({ params }: { params: { code: s
         <div className="card center stack">
           <span className="pill amber">New tag</span>
           <h1>Activate your new tag</h1>
-          <p className="muted">
-            This SecureTag isn&apos;t activated yet. Log in or create an account to link it to your item.
-          </p>
+          <p className="muted">This SecureTag isn&apos;t linked to anyone yet. If it&apos;s yours, activate it in two quick steps:</p>
+          <ol className="mini-steps">
+            <li><span><b>Create an account</b> (or log in)</span></li>
+            <li><span><b>Add your item details</b> and you&apos;re done</span></li>
+          </ol>
           <Link href={`/register?next=${next}`} className="btn block lg">Register &amp; activate</Link>
           <Link href={`/login?next=${next}`} className="btn secondary block">I already have an account</Link>
           <p className="muted small">Tag ID: {code}</p>
@@ -74,7 +76,7 @@ export default async function LegacyActivatePage({ params }: { params: { code: s
         <p className="muted">
           Tell us what it&apos;s on. Finders only see your contact details after you mark the item as Lost.
         </p>
-        <LegacyItemForm mode="claim" code={code} email={user.email} />
+        <LegacyItemForm mode="claim" code={code} email={user.email} prefill={{ owner_name: user.fullName, phone: user.phone }} />
       </div>
     </main>
   );

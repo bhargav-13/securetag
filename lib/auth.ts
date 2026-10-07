@@ -8,6 +8,9 @@ export type SessionUser = {
   email: string;
   role: Role;
   isAdmin: boolean;
+  /** From sign-up; used to pre-fill tag forms. */
+  fullName: string | null;
+  phone: string | null;
 };
 
 /**
@@ -37,7 +40,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       .maybeSingle();
 
     const role: Role = profile?.role === "admin" ? "admin" : "user";
-    return { id: user.id, email: user.email, role, isAdmin: role === "admin" };
+    const meta = (user.user_metadata ?? {}) as { full_name?: string; phone?: string };
+    return {
+      id: user.id,
+      email: user.email,
+      role,
+      isAdmin: role === "admin",
+      fullName: meta.full_name || null,
+      phone: meta.phone || null,
+    };
   } catch {
     return null;
   }

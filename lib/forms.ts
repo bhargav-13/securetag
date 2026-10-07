@@ -71,6 +71,24 @@ const echo = (fd: FormData) => {
 
 const nil = (v: string | null | undefined) => (v ? v : null);
 
+/* ----------------------------- sign-up ----------------------------- */
+
+export function parseSignUpForm(fd: FormData) {
+  const c = new Checker();
+  const full_name = text(fd, "full_name");
+  const email = text(fd, "email").toLowerCase();
+  const password = String(fd.get("password") ?? "");
+  c.required("full_name", full_name, "Enter your name.");
+  c.max("full_name", full_name, 80);
+  const phone = c.phone("phone", text(fd, "phone"), true);
+  c.required("email", email, "Enter your email.");
+  c.email("email", email);
+  if (password.length < 6) c.errors.password = "Use at least 6 characters.";
+  const values = echo(fd);
+  delete values.password;
+  return { fieldErrors: c.errors, values, data: { full_name, phone: phone ?? "", email, password } };
+}
+
 /* ----------------------------- vehicle ----------------------------- */
 
 export function parseVehicleForm(fd: FormData) {

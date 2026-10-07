@@ -812,3 +812,55 @@ fieldset.chips legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; p
     border-top: 1px solid var(--border);
   }
 }
+
+/* =====================================================================
+   Compact phone layout — tighter type, spacing and controls so forms and
+   tag pages fit the screen instead of feeling oversized.
+   ===================================================================== */
+@media (max-width: 559px) {
+  body { font-size: 14.5px; }
+  .container { padding: 14px 12px 40px; }
+  .card { padding: 16px; border-radius: 14px; }
+  .card + .card { margin-top: 12px; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  h2 { font-size: 17px; }
+  .muted { font-size: 13.5px; }
+
+  .site-header .inner { padding: 9px 12px; }
+  .logo img { height: 24px; }
+  .nav { gap: 6px; }
+  .nav .btn.small { padding: 7px 11px; font-size: 12.5px; border-radius: 10px; }
+
+  .btn { padding: 11px 15px; font-size: 14.5px; border-radius: 11px; }
+  .btn.lg { padding: 12px 18px; font-size: 15px; }
+
+  label { font-size: 12.5px; margin-bottom: 5px; }
+  /* 16px keeps iOS from zooming into a field on focus */
+  input, textarea, select { padding: 10px 12px; font-size: 16px; border-radius: 10px; }
+  textarea { min-height: 72px; }
+  .frow { gap: 12px; }
+  .field-group { margin-top: 12px; }
+  .frow + .frow, .frow + .field-group, .field-group + .frow, .frow + fieldset.chips { margin-top: 12px; }
+  .field-hint, .field-error { font-size: 12px; margin-top: 4px; }
+
+  .form-head { margin-bottom: 8px; }
+  .form-section { margin-top: 18px; padding-top: 16px; }
+  .form-section > h3, details.form-section.optional > summary .t { font-size: 14.5px; }
+  .form-section > .form-section-sub { font-size: 12.5px; margin-bottom: 12px; }
+  .form-alert { padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+  .chip span { padding: 7px 12px; font-size: 13.5px; }
+  .code-chip { font-size: 12px; padding: 2px 7px; }
+
+  .submit-bar { margin: 18px -16px 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .pill { font-size: 11.5px; padding: 3px 9px; }
+  .notice { padding: 10px 12px; font-size: 13px; }
+}
+
+/* two-step hint on the "activate this tag" landing */
+.mini-steps { text-align: left; margin: 4px auto 6px; padding: 0; list-style: none; counter-reset: s; max-width: 320px; }
+.mini-steps li { counter-increment: s; display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 14px; color: var(--muted); }
+.mini-steps li::before {
+  content: counter(s); flex: 0 0 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: #eceafd; color: var(--brand-ink); font-weight: 800; font-size: 12.5px;
+}
+.mini-steps b { color: var(--text); }

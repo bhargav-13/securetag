@@ -93,7 +93,11 @@ export default async function TagPage({
         <div className="card center stack">
           <span className="pill amber">New tag</span>
           <h1>Activate this tag</h1>
-          <p className="muted">This SecureTag isn&apos;t registered yet. Log in or create an account to set it up with your vehicle details.</p>
+          <p className="muted">This SecureTag isn&apos;t linked to anyone yet. If it&apos;s yours, activate it in two quick steps:</p>
+          <ol className="mini-steps">
+            <li><span><b>Create an account</b> (or log in)</span></li>
+            <li><span><b>Add your vehicle details</b> and you&apos;re done</span></li>
+          </ol>
           <Link href={`/register?next=${next}`} className="btn block lg">Register &amp; activate</Link>
           <Link href={`/login?next=${next}`} className="btn secondary block">I already have an account</Link>
           <p className="muted small">Tag ID: {tag.id}</p>
@@ -113,7 +117,7 @@ export default async function TagPage({
         <p className="muted">
           Takes a minute. People who scan it can then ask to reach you, and you decide whether to share your number.
         </p>
-        <VehicleForm mode="claim" tagId={tag.id} />
+        <VehicleForm mode="claim" tagId={tag.id} prefill={{ owner_name: user.fullName, phone: user.phone }} />
       </div>
     </main>
   );

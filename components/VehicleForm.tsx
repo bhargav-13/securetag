@@ -11,10 +11,13 @@ export default function VehicleForm({
   mode,
   tagId,
   tag,
+  prefill,
 }: {
   mode: "claim" | "edit";
   tagId: string;
   tag?: Tag;
+  /** Account name/phone, used when activating a new tag. */
+  prefill?: { owner_name?: string | null; phone?: string | null };
 }) {
   const [state, action] = useFormState<FormState, FormData>(mode === "claim" ? claimTag : updateTag, undefined);
 
@@ -22,7 +25,7 @@ export default function VehicleForm({
     <FormShell
       action={action}
       state={state}
-      initial={tag ?? {}}
+      initial={tag ?? prefill ?? {}}
       pendingLabel={mode === "claim" ? "Activating your tag" : "Saving changes"}
     >
       <input type="hidden" name="id" value={tagId} />

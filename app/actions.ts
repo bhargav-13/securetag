@@ -9,7 +9,7 @@ import { getSessionUser, requireAdmin } from "@/lib/auth";
 import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
 import { LEGACY_ALPHABET, LEGACY_CODE_RE } from "@/lib/legacy";
 import { safeNext } from "@/lib/nextContext";
-import { parseVehicleForm, parseLegacyForm, invalid, hasErrors, type FormState } from "@/lib/forms";
+import { parseSignUpForm, parseVehicleForm, parseLegacyForm, invalid, hasErrors, type FormState } from "@/lib/forms";
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function shortCode(len = 8, alphabet = ALPHABET) {
@@ -47,27 +47,34 @@ export async function signInAction(_prev: FormState, formData: FormData): Promis
 }
 
 export async function signUpAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const email = String(formData.get("email") || "").trim();
-  const password = String(formData.get("password") || "");
   const next = safeNext(formData.get("next"));
-  const values = { email };
-  if (!email || !password) return { error: "Enter your email and a password.", values };
-  if (password.length < 6)
-    return { fieldErrors: { password: "Use at least 6 characters." }, error: "Password is too short.", values };
+  const parsed = parseSignUpForm(formData);
+  if (hasErrors(parsed.fieldErrors)) return invalid(parsed);
+  const { full_name, phone, email, password } = parsed.data;
 
   const supabase = createSupabaseServerClient();
   const origin = process.env.NEXT_PUBLIC_BASE_URL || "";
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    // Brings them back to what they were doing (e.g. activating a tag).
-    // Must be allowed under Supabase → Auth → URL Configuration; if it isn't,
-    // Supabase falls back to the Site URL, which is the old behaviour.
-    options: origin ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : undefined,
+    options: {
+      // Name + phone live on the auth user and pre-fill the tag forms.
+      data: { full_name, phone },
+      // Brings them back to what they were doing (e.g. activating a tag).
+      // Must be allowed under Supabase → Auth → URL Configuration; if it isn't,
+      // Supabase falls back to the Site URL.
+      ...(origin ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : {}),
+    },
   });
-  if (error) return { error: friendlyAuthError(error.message), values };
+  if (error) return { error: friendlyAuthError(error.message), values: parsed.values };
+  if (data.user) {
+    await getAdminClient().from("profiles").update({ full_name }).eq("id", data.user.id);
+  }
   if (!data.session)
-    return { info: `Almost done — we sent a confirmation link to ${email}. Open it, then log in to continue.`, values };
+    return {
+      info: `Almost done — we sent a confirmation link to ${email}. Open it on this phone and you'll come straight back here.`,
+      values: parsed.values,
+    };
   redirect(next);
 }
 
