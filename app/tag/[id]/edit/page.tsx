@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminClient, type Tag } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth";
-import EditForm from "./EditForm";
+import VehicleForm from "@/components/VehicleForm";
 
 export const dynamic = "force-dynamic";
 
@@ -27,18 +27,20 @@ export default async function EditPage({
 
   return (
     <main className="container">
+      <p className="back-link"><Link href={`/tag/${tag.id}`}>← Back to tag</Link></p>
       <div className="card">
+        <div className="form-head">
+          <span className="pill green">Live tag</span>
+          <span className="code-chip">{tag.id}</span>
+        </div>
         <h1>Edit tag details</h1>
         {!tag.claimed ? (
           <p className="error">This tag hasn&apos;t been registered yet.</p>
         ) : !canEdit ? (
           <p className="error">You are not the owner of this tag.</p>
         ) : (
-          <EditForm tag={tag} />
+          <VehicleForm mode="edit" tagId={tag.id} tag={tag} />
         )}
-        <p className="muted center mt">
-          <Link href={`/tag/${tag.id}`}>Back to tag</Link>
-        </p>
       </div>
     </main>
   );

@@ -708,9 +708,7 @@ html { scroll-behavior: smooth; }
 .legacy-filters .seg.sel { border-color: var(--brand); background: #eceafd; color: var(--brand-ink); }
 .legacy-filters .seg .seg-n { opacity: .6; margin-left: 4px; }
 a.seg { text-decoration: none; display: inline-block; }
-.check-row { display: flex; gap: 18px; flex-wrap: wrap; }
-.check-row label { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; margin: 0; cursor: pointer; }
-.check-row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+
 .legacy-search {
   flex: 1; min-width: 220px; padding: 9px 13px; border: 1px solid var(--border);
   border-radius: 9px; font-size: 14px;
@@ -719,3 +717,98 @@ a.seg { text-decoration: none; display: inline-block; }
 .table-scroll { overflow-x: auto; }
 .table-scroll .utable td code { font-weight: 700; }
 .table-scroll .utable a { color: var(--brand); text-decoration: none; }
+
+/* =====================================================================
+   Form kit (components/form.tsx) — shared by every data-entry form
+   ===================================================================== */
+.form-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.code-chip {
+  display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--brand-ink);
+  background: #eef0fd; border: 1px solid #dcdffb; border-radius: 8px; padding: 3px 9px;
+}
+.back-link { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+
+.form-body > .form-section:first-of-type { margin-top: 18px; }
+/* vertical rhythm between consecutive rows / fields inside a section */
+.frow + .frow, .frow + .field-group, .field-group + .frow, .frow + fieldset.chips { margin-top: 16px; }
+.form-section > h3 { display: flex; align-items: center; gap: 8px; }
+
+/* required / optional markers + messages */
+.req-mark { color: var(--red); }
+.opt-mark { color: var(--muted); font-weight: 500; }
+.field-hint { display: flex; justify-content: space-between; gap: 10px; }
+.field-error { color: var(--red); font-size: 12.5px; font-weight: 600; margin: 6px 0 0; }
+.has-error input, .has-error textarea, .has-error select {
+  border-color: #f2a3a3; background: #fff8f8;
+}
+.has-error input:focus, .has-error textarea:focus, .has-error select:focus {
+  border-color: var(--red); box-shadow: 0 0 0 3.5px rgba(220,38,38,.12);
+}
+.char-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.char-count.near { color: var(--amber); font-weight: 600; }
+input.upper { text-transform: uppercase; }
+input:disabled { color: var(--muted); cursor: not-allowed; }
+
+/* banners at the top of a form */
+.form-alert { border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.error-alert { background: #fdecec; border: 1px solid #f6c9c9; color: #a61b1b; }
+.info-alert { background: #e7f6ec; border: 1px solid #bfe5cb; color: #136c33; }
+
+/* collapsible optional sections */
+details.form-section.optional > summary {
+  list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+  padding: 2px 30px 2px 0; position: relative;
+}
+details.form-section.optional > summary::-webkit-details-marker { display: none; }
+details.form-section.optional > summary .t { font-weight: 700; font-size: 15px; }
+details.form-section.optional > summary .t::before { content: "+ "; color: var(--brand); font-weight: 800; }
+details.form-section.optional[open] > summary .t::before { content: "– "; }
+details.form-section.optional > summary .form-section-sub { margin: 0; color: var(--muted); font-size: 13px; font-weight: 400; }
+details.form-section.optional > summary:hover .t { color: var(--brand); }
+.optional-body { margin-top: 16px; }
+
+/* toggle chips (checkbox group) */
+fieldset.chips { border: 0; padding: 0; margin: 18px 0 0; min-width: 0; }
+fieldset.chips legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0; }
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { margin: 0; cursor: pointer; font-weight: 600; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip span {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+  border: 1.5px solid var(--border); background: var(--surface-2); color: var(--muted); font-size: 14px;
+  transition: all .15s ease;
+}
+.chip span::before { content: ""; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid #c3c7dc; background: #fff; }
+.chip input:checked + span { border-color: var(--brand); background: #eceafd; color: var(--brand-ink); }
+.chip input:checked + span::before {
+  border-color: var(--brand); background: var(--brand)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/10px no-repeat;
+}
+.chip input:focus-visible + span { box-shadow: 0 0 0 3.5px rgba(99,102,241,.2); }
+.has-error .chip span { border-color: #f2a3a3; }
+
+/* password show/hide */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 70px; }
+.pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: 0; background: transparent; color: var(--brand); font-weight: 700; font-size: 13px;
+  padding: 6px 8px; cursor: pointer; border-radius: 8px;
+}
+.pw-toggle:hover { background: #eef0fd; }
+
+/* submit bar: inline on desktop, pinned to the bottom of the screen on phones */
+.submit-bar { margin-top: 24px; }
+.submit-actions { display: flex; gap: 10px; }
+.submit-actions .btn { flex: 1; }
+.submit-actions .btn.ghost { flex: 0 0 auto; }
+.submit-note { text-align: center; margin: 12px 0 0; }
+@media (max-width: 559px) {
+  .submit-bar {
+    position: sticky; bottom: 0; z-index: 5;
+    margin: 24px -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255,255,255,.94); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+  }
+}

@@ -7,7 +7,9 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionUser, requireAdmin } from "@/lib/auth";
 import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
-import { ITEM_TYPES, LEGACY_ALPHABET, LEGACY_CODE_RE } from "@/lib/legacy";
+import { LEGACY_ALPHABET, LEGACY_CODE_RE } from "@/lib/legacy";
+import { safeNext } from "@/lib/nextContext";
+import { parseVehicleForm, parseLegacyForm, invalid, hasErrors, type FormState } from "@/lib/forms";
 
 const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function shortCode(len = 8, alphabet = ALPHABET) {
@@ -17,34 +19,85 @@ function shortCode(len = 8, alphabet = ALPHABET) {
   return out;
 }
 
-export type FormState = { error?: string; info?: string } | undefined;
+export type { FormState } from "@/lib/forms";
 
 /* ----------------------------- AUTH ----------------------------- */
+
+/** Supabase's auth messages, reworded for people (falls back to the original). */
+function friendlyAuthError(msg: string) {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login")) return "That email and password don't match. Try again, or use \"Forgot password?\".";
+  if (m.includes("not confirmed")) return "Please confirm your email first — open the link we sent to your inbox.";
+  if (m.includes("already registered")) return "An account with this email already exists. Log in instead.";
+  if (m.includes("rate limit")) return "Too many attempts. Please wait a minute and try again.";
+  return msg;
+}
 
 export async function signInAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
-  const next = String(formData.get("next") || "/dashboard");
-  if (!email || !password) return { error: "Email and password are required." };
+  const next = safeNext(formData.get("next"));
+  const values = { email };
+  if (!email || !password) return { error: "Enter your email and password.", values };
 
   const supabase = createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyAuthError(error.message), values };
   redirect(next);
 }
 
 export async function signUpAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
-  const next = String(formData.get("next") || "/dashboard");
-  if (!email || !password) return { error: "Email and password are required." };
-  if (password.length < 6) return { error: "Password must be at least 6 characters." };
+  const next = safeNext(formData.get("next"));
+  const values = { email };
+  if (!email || !password) return { error: "Enter your email and a password.", values };
+  if (password.length < 6)
+    return { fieldErrors: { password: "Use at least 6 characters." }, error: "Password is too short.", values };
 
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) return { error: error.message };
-  if (!data.session) return { info: "Account created. Check your email to confirm, then log in." };
+  const origin = process.env.NEXT_PUBLIC_BASE_URL || "";
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    // Brings them back to what they were doing (e.g. activating a tag).
+    // Must be allowed under Supabase → Auth → URL Configuration; if it isn't,
+    // Supabase falls back to the Site URL, which is the old behaviour.
+    options: origin ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : undefined,
+  });
+  if (error) return { error: friendlyAuthError(error.message), values };
+  if (!data.session)
+    return { info: `Almost done — we sent a confirmation link to ${email}. Open it, then log in to continue.`, values };
   redirect(next);
+}
+
+/** Sends a password-reset link. Always answers the same way so it can't be
+    used to find out which emails have accounts. */
+export async function requestPasswordReset(_prev: FormState, formData: FormData): Promise<FormState> {
+  const email = String(formData.get("email") || "").trim();
+  const values = { email };
+  if (!email) return { fieldErrors: { email: "Enter your email." }, error: "Enter your email.", values };
+
+  const supabase = createSupabaseServerClient();
+  const origin = process.env.NEXT_PUBLIC_BASE_URL || "";
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: origin ? `${origin}/auth/callback?next=/reset-password` : undefined,
+  });
+  if (error && error.message.toLowerCase().includes("rate limit")) return { error: friendlyAuthError(error.message), values };
+  return { info: `If an account exists for ${email}, a reset link is on its way. It works on this device and browser.`, values };
+}
+
+/** Sets a new password for the user signed in via the reset link. */
+export async function updatePassword(_prev: FormState, formData: FormData): Promise<FormState> {
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+  if (password.length < 6) return { fieldErrors: { password: "Use at least 6 characters." }, error: "Password is too short." };
+  if (password !== confirm) return { fieldErrors: { confirm: "Passwords don't match." }, error: "Passwords don't match." };
+
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: friendlyAuthError(error.message) };
+  redirect("/dashboard?password_updated=1");
 }
 
 export async function signOutAction() {
@@ -59,46 +112,24 @@ export async function claimTag(_prev: FormState, formData: FormData): Promise<Fo
   const user = await getSessionUser();
   const id = String(formData.get("id") || "").trim();
   if (!user) redirect(`/login?next=/tag/${id}`);
-
-  const owner_name = String(formData.get("owner_name") || "").trim();
-  const phone = String(formData.get("phone") || "").trim();
-  const car_model = String(formData.get("car_model") || "").trim();
-  const plate_number = String(formData.get("plate_number") || "").trim();
-  const message = String(formData.get("message") || "").trim();
-  const emergency_contact_name = String(formData.get("emergency_contact_name") || "").trim();
-  const emergency_contact_phone = String(formData.get("emergency_contact_phone") || "").trim();
-  const alt_phone = String(formData.get("alt_phone") || "").trim();
-  const alt_email = String(formData.get("alt_email") || "").trim();
-  const address = String(formData.get("address") || "").trim();
-
   if (!id) return { error: "Missing tag id." };
-  if (!owner_name || !phone) return { error: "Name and phone number are required." };
+
+  const parsed = parseVehicleForm(formData);
+  if (hasErrors(parsed.fieldErrors)) return invalid(parsed);
 
   const db = getAdminClient();
   const { data: tag } = await db.from("tags").select("id, claimed").eq("id", id).maybeSingle();
   if (!tag) return { error: "Invalid tag — this code does not exist." };
   if (tag.claimed) return { error: "This tag is already activated." };
 
-  const { error } = await db
+  const { data: updated, error } = await db
     .from("tags")
-    .update({
-      claimed: true,
-      owner_user_id: user!.id,
-      owner_name,
-      phone,
-      car_model: car_model || null,
-      plate_number: plate_number || null,
-      message: message || null,
-      emergency_contact_name: emergency_contact_name || null,
-      emergency_contact_phone: emergency_contact_phone || null,
-      alt_phone: alt_phone || null,
-      alt_email: alt_email || null,
-      address: address || null,
-      claimed_at: new Date().toISOString(),
-    })
+    .update({ ...parsed.data, claimed: true, owner_user_id: user!.id, claimed_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("claimed", false);
-  if (error) return { error: error.message };
+    .eq("claimed", false)
+    .select("id");
+  if (error) return { error: error.message, values: parsed.values };
+  if (!updated?.length) return { error: "This tag was just activated by someone else." };
 
   revalidatePath(`/tag/${id}`);
   redirect(`/tag/${id}?activated=1`);
@@ -108,20 +139,10 @@ export async function updateTag(_prev: FormState, formData: FormData): Promise<F
   const user = await getSessionUser();
   const id = String(formData.get("id") || "").trim();
   if (!user) redirect(`/login?next=/tag/${id}/edit`);
-
-  const owner_name = String(formData.get("owner_name") || "").trim();
-  const phone = String(formData.get("phone") || "").trim();
-  const car_model = String(formData.get("car_model") || "").trim();
-  const plate_number = String(formData.get("plate_number") || "").trim();
-  const message = String(formData.get("message") || "").trim();
-  const emergency_contact_name = String(formData.get("emergency_contact_name") || "").trim();
-  const emergency_contact_phone = String(formData.get("emergency_contact_phone") || "").trim();
-  const alt_phone = String(formData.get("alt_phone") || "").trim();
-  const alt_email = String(formData.get("alt_email") || "").trim();
-  const address = String(formData.get("address") || "").trim();
-
   if (!id) return { error: "Missing tag id." };
-  if (!owner_name || !phone) return { error: "Name and phone number are required." };
+
+  const parsed = parseVehicleForm(formData);
+  if (hasErrors(parsed.fieldErrors)) return invalid(parsed);
 
   const db = getAdminClient();
   const { data: tag } = await db.from("tags").select("id, owner_user_id").eq("id", id).maybeSingle();
@@ -129,25 +150,12 @@ export async function updateTag(_prev: FormState, formData: FormData): Promise<F
   if (!user!.isAdmin && tag.owner_user_id !== user!.id)
     return { error: "You are not the owner of this tag." };
 
-  const { error } = await db
-    .from("tags")
-    .update({
-      owner_name,
-      phone,
-      car_model: car_model || null,
-      plate_number: plate_number || null,
-      message: message || null,
-      emergency_contact_name: emergency_contact_name || null,
-      emergency_contact_phone: emergency_contact_phone || null,
-      alt_phone: alt_phone || null,
-      alt_email: alt_email || null,
-      address: address || null,
-    })
-    .eq("id", id);
-  if (error) return { error: error.message };
+  const { error } = await db.from("tags").update(parsed.data).eq("id", id);
+  if (error) return { error: error.message, values: parsed.values };
 
   revalidatePath(`/tag/${id}`);
-  redirect(`/tag/${id}`);
+  revalidatePath("/dashboard");
+  redirect(`/tag/${id}?saved=1`);
 }
 
 /** Owner/admin toggles Lost Mode for a tag. */
@@ -201,7 +209,7 @@ export async function setLegacyLostMode(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-/** Owner edits the contact details on one of their legacy items. */
+/** Owner edits the details on one of their legacy items. */
 export async function updateLegacyItem(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await getSessionUser();
   const code = String(formData.get("code") || "").trim();
@@ -210,35 +218,15 @@ export async function updateLegacyItem(_prev: FormState, formData: FormData): Pr
   const row = await assertLegacyOwner(code, user!.email);
   if (!row) return { error: "You are not the owner of this item." };
 
-  const item_name = String(formData.get("item_name") || "").trim();
-  const item_type = String(formData.get("item_type") || "").trim();
-  const owner_name = String(formData.get("owner_name") || "").trim();
-  const phone = String(formData.get("phone") || "").trim();
-  const alt_phone = String(formData.get("alt_phone") || "").trim();
-  const message = String(formData.get("message") || "").trim();
-  const address = String(formData.get("address") || "").trim();
-  const pref_contact = String(formData.get("pref_contact") || "").trim().toUpperCase();
-
-  if (!owner_name || !phone) return { error: "Name and phone number are required." };
+  const parsed = parseLegacyForm(formData);
+  if (hasErrors(parsed.fieldErrors)) return invalid(parsed);
 
   const db = getAdminClient();
-  const { error } = await db
-    .from("legacy_tags")
-    .update({
-      item_name: item_name || null,
-      ...(ITEM_TYPES[item_type] ? { item_type } : {}),
-      owner_name,
-      phone,
-      alt_phone: alt_phone || null,
-      message: message || null,
-      address: address || null,
-      pref_contact: pref_contact || null,
-    })
-    .eq("id", code);
-  if (error) return { error: error.message };
+  const { error } = await db.from("legacy_tags").update(parsed.data).eq("id", code);
+  if (error) return { error: error.message, values: parsed.values };
 
   revalidatePath("/dashboard");
-  redirect("/dashboard");
+  redirect(`/dashboard?legacy_saved=${code}`);
 }
 
 /** Owner activates a blank legacy code (the old /tags/add flow). The row is
@@ -249,57 +237,28 @@ export async function claimLegacyTag(_prev: FormState, formData: FormData): Prom
   if (!user) redirect(`/login?next=/legacy/activate/${code}`);
   if (!LEGACY_CODE_RE.test(code)) return { error: "Invalid tag code." };
 
-  const val = (k: string) => String(formData.get(k) || "").trim();
-  const item_name = val("item_name");
-  const item_type = val("item_type");
-  const owner_name = val("owner_name");
-  const phone = val("phone");
-  const alt_phone = val("alt_phone");
-  const message = val("message");
-  const street = val("street");
-  const city = val("city");
-  const state = val("state");
-  const postal = val("postal_code");
-  const country = val("country");
-  const pref = formData.getAll("pref_contact").map((v) => String(v).toUpperCase()).filter((v) => v === "PHONE" || v === "EMAIL");
-
-  if (!item_name) return { error: "Give your item a name." };
-  if (!ITEM_TYPES[item_type]) return { error: "Choose what the tag is attached to." };
-  if (!owner_name || !phone) return { error: "Name and phone number are required." };
-  if (pref.length === 0) return { error: "Choose at least one way a finder can contact you." };
+  const parsed = parseLegacyForm(formData);
+  if (hasErrors(parsed.fieldErrors)) return invalid(parsed);
 
   const db = getAdminClient();
   const { data: tag } = await db.from("legacy_tags").select("id, claimed").eq("id", code).maybeSingle();
   if (!tag) return { error: "Invalid tag — this code does not exist." };
   if (tag.claimed) return { error: "This tag is already activated." };
 
-  // Same shape the importer produced: full address string + split columns.
-  const address = [street, city, state, postal, country].filter(Boolean).join(", ");
-
   const { data: updated, error } = await db
     .from("legacy_tags")
     .update({
+      ...parsed.data,
       claimed: true,
       email: user!.email.trim().toLowerCase(),
-      item_name,
-      item_type,
-      owner_name,
-      phone,
-      alt_phone: alt_phone || null,
-      message: message || null,
-      address: address || null,
-      city: city || null,
-      state: state || null,
-      country: country || null,
-      pref_contact: pref.join(","),
       lost_mode: false,
       status_raw: "AVAILABLE",
     })
     .eq("id", code)
     .eq("claimed", false)
     .select("id");
-  if (error) return { error: error.message };
-  if (!updated || updated.length === 0) return { error: "This tag is already activated." };
+  if (error) return { error: error.message, values: parsed.values };
+  if (!updated?.length) return { error: "This tag was just activated by someone else." };
 
   revalidatePath("/dashboard");
   redirect(`/dashboard?legacy_activated=${code}`);

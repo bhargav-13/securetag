@@ -175,7 +175,7 @@ function HistoryRow({ r }: { r: ScanReq }) {
 export default async function Dashboard({
   searchParams,
 }: {
-  searchParams: { created?: string; legacy_activated?: string };
+  searchParams: { created?: string; legacy_activated?: string; legacy_saved?: string; password_updated?: string };
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/dashboard");
@@ -215,6 +215,16 @@ export default async function Dashboard({
       {searchParams.legacy_activated && (
         <div className="notice">
           <CheckIcon size={15} /> Tag {searchParams.legacy_activated} is active. Turn on Lost Mode below if the item goes missing.
+        </div>
+      )}
+      {searchParams.password_updated && (
+        <div className="notice">
+          <CheckIcon size={15} /> Password updated.
+        </div>
+      )}
+      {searchParams.legacy_saved && (
+        <div className="notice">
+          <CheckIcon size={15} /> Changes to {searchParams.legacy_saved} saved.
         </div>
       )}
 

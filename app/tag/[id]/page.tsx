@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getAdminClient, type Tag } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth";
 import { setLostMode } from "@/app/actions";
-import ClaimForm from "./ClaimForm";
+import VehicleForm from "@/components/VehicleForm";
 import RequestFlow from "./RequestFlow";
 import PendingOverlay from "@/components/PendingOverlay";
 import { AlertIcon, CheckIcon } from "@/components/Icons";
@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 
 async function getTag(id: string): Promise<Tag | null> {
   const db = getAdminClient();
-  const { data } = await db.from("tags").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await db.from("tags").select("*").eq("id", id).maybeSingle();
+  // A DB outage must surface as an error, not as "tag not found".
+  if (error) throw new Error(`Could not load tag: ${error.message}`);
   return (data as Tag) ?? null;
 }
 
@@ -21,7 +23,7 @@ export default async function TagPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { activated?: string };
+  searchParams: { activated?: string; saved?: string };
 }) {
   const tag = await getTag(params.id);
   if (!tag) notFound();
@@ -37,6 +39,9 @@ export default async function TagPage({
         <main className="container stack">
           {searchParams.activated && (
             <div className="notice"><CheckIcon size={15} /> Your tag is live. When someone scans it, you&apos;ll be asked to share your contact.</div>
+          )}
+          {searchParams.saved && (
+            <div className="notice"><CheckIcon size={15} /> Changes saved.</div>
           )}
           <div className="card">
             <div className="spread">
@@ -100,11 +105,15 @@ export default async function TagPage({
   return (
     <main className="container">
       <div className="card">
-        <span className="pill amber">New tag</span>
-        <h1 style={{ marginTop: 12 }}>Register this tag</h1>
-        <p className="muted">Add your details. After this, anyone who scans it can request to reach you.</p>
-        <ClaimForm id={tag.id} />
-        <p className="muted small center mt">Tag ID: {tag.id}</p>
+        <div className="form-head">
+          <span className="pill amber">New tag</span>
+          <span className="code-chip">{tag.id}</span>
+        </div>
+        <h1>Activate your tag</h1>
+        <p className="muted">
+          Takes a minute. People who scan it can then ask to reach you, and you decide whether to share your number.
+        </p>
+        <VehicleForm mode="claim" tagId={tag.id} />
       </div>
     </main>
   );

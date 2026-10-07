@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth";
 import { LEGACY_CODE_RE } from "@/lib/legacy";
-import LegacyClaimForm from "./LegacyClaimForm";
+import LegacyItemForm from "@/components/LegacyItemForm";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +15,12 @@ export default async function LegacyActivatePage({ params }: { params: { code: s
   if (!LEGACY_CODE_RE.test(code)) notFound();
 
   const db = getAdminClient();
-  const { data: tag } = await db
+  const { data: tag, error } = await db
     .from("legacy_tags")
     .select("id, claimed, email")
     .eq("id", code)
     .maybeSingle();
+  if (error) throw new Error(`Could not load tag: ${error.message}`);
   if (!tag) notFound();
 
   const user = await getSessionUser();
@@ -65,13 +66,15 @@ export default async function LegacyActivatePage({ params }: { params: { code: s
   return (
     <main className="container">
       <div className="card">
-        <span className="pill amber">New tag</span>
-        <h1 style={{ marginTop: 12 }}>Activate your tag</h1>
+        <div className="form-head">
+          <span className="pill amber">New tag</span>
+          <span className="code-chip">{code}</span>
+        </div>
+        <h1>Activate your tag</h1>
         <p className="muted">
-          Tell us what this tag is on. A finder sees your contact details only when you mark the item as Lost.
+          Tell us what it&apos;s on. Finders only see your contact details after you mark the item as Lost.
         </p>
-        <LegacyClaimForm code={code} email={user.email} />
-        <p className="muted small center mt">Tag ID: {code}</p>
+        <LegacyItemForm mode="claim" code={code} email={user.email} />
       </div>
     </main>
   );

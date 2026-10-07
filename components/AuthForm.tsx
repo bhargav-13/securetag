@@ -1,18 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
-import { signInAction, signUpAction, type FormState } from "@/app/actions";
-import PendingOverlay from "@/components/PendingOverlay";
-
-function Submit({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button className="btn block lg" type="submit" disabled={pending}>
-      {pending ? "Please wait…" : label}
-    </button>
-  );
-}
+import { useFormState } from "react-dom";
+import { signInAction, signUpAction } from "@/app/actions";
+import type { FormState } from "@/lib/forms";
+import { FormShell, PasswordField, SubmitBar, TextField } from "@/components/form";
 
 export default function AuthForm({
   mode,
@@ -21,52 +13,40 @@ export default function AuthForm({
   mode: "login" | "register";
   next: string;
 }) {
-  const action = mode === "login" ? signInAction : signUpAction;
   const [state, formAction] = useFormState<FormState, FormData>(
-    action,
+    mode === "login" ? signInAction : signUpAction,
     undefined
   );
+  const other = mode === "login" ? "/register" : "/login";
 
   return (
-    <form action={formAction}>
-      <PendingOverlay label={mode === "login" ? "Signing you in" : "Creating your account"} />
+    <FormShell action={formAction} state={state} pendingLabel={mode === "login" ? "Signing you in" : "Creating your account"}>
       <input type="hidden" name="next" value={next} />
 
-      <label htmlFor="email">Email</label>
-      <input id="email" name="email" type="email" required autoComplete="email" placeholder="you@example.com" />
-
-      <label htmlFor="password">Password</label>
-      <input
-        id="password"
+      <TextField name="email" label="Email" type="email" required autoComplete="email" placeholder="you@example.com" />
+      <PasswordField
         name="password"
-        type="password"
-        required
+        label="Password"
         autoComplete={mode === "login" ? "current-password" : "new-password"}
-        placeholder={mode === "register" ? "At least 6 characters" : "••••••••"}
+        hint={mode === "register" ? "At least 6 characters." : undefined}
+      />
+      {mode === "login" && (
+        <p className="small" style={{ margin: "8px 0 0", textAlign: "right" }}>
+          <Link href="/forgot">Forgot password?</Link>
+        </p>
+      )}
+
+      <SubmitBar
+        label={mode === "login" ? "Log in" : "Create account"}
+        pendingLabel="Please wait…"
       />
 
-      {state?.error && <p className="error">{state.error}</p>}
-      {state?.info && <p className="info">{state.info}</p>}
-
-      <div className="mt">
-        <Submit label={mode === "login" ? "Log in" : "Create account"} />
-      </div>
-
       <p className="muted center mt">
-        {mode === "login" ? (
-          <>
-            No account?{" "}
-            <Link href={`/register?next=${encodeURIComponent(next)}`}>
-              Register
-            </Link>
-          </>
-        ) : (
-          <>
-            Already have one?{" "}
-            <Link href={`/login?next=${encodeURIComponent(next)}`}>Log in</Link>
-          </>
-        )}
+        {mode === "login" ? "New to SecureTag?" : "Already have an account?"}{" "}
+        <Link href={`${other}?next=${encodeURIComponent(next)}`}>
+          {mode === "login" ? "Create an account" : "Log in"}
+        </Link>
       </p>
-    </form>
+    </FormShell>
   );
 }

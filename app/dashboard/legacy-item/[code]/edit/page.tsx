@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth";
-import LegacyEditForm, { type LegacyEditable } from "./LegacyEditForm";
+import LegacyItemForm, { type LegacyItemValues } from "@/components/LegacyItemForm";
 
 export const dynamic = "force-dynamic";
 
@@ -15,14 +15,15 @@ export default async function LegacyEditPage({
   if (!user) redirect(`/login?next=/dashboard/legacy-item/${params.code}/edit`);
 
   const db = getAdminClient();
-  const { data } = await db
+  const { data, error } = await db
     .from("legacy_tags")
-    .select("id,item_name,item_type,owner_name,phone,alt_phone,message,address,pref_contact,email,claimed")
+    .select("id,item_name,item_type,owner_name,phone,alt_phone,message,address,city,state,country,pref_contact,email,claimed")
     .eq("id", params.code)
     .maybeSingle();
+  if (error) throw new Error(`Could not load item: ${error.message}`);
   if (!data) notFound();
 
-  const item = data as LegacyEditable & { claimed: boolean };
+  const item = data as LegacyItemValues & { id: string; email: string | null; claimed: boolean };
   // Authorize purely by verified email match.
   const owns =
     item.claimed &&
@@ -31,19 +32,18 @@ export default async function LegacyEditPage({
 
   return (
     <main className="container">
+      <p className="back-link"><Link href="/dashboard">← Back to dashboard</Link></p>
       <div className="card">
-        <h1>Edit legacy item</h1>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Tag ID <code>{item.id}</code>
-        </p>
+        <div className="form-head">
+          <span className="pill brand">Item tag</span>
+          <span className="code-chip">{item.id}</span>
+        </div>
+        <h1>Edit item details</h1>
         {!owns ? (
           <p className="error">This item isn&apos;t linked to your account&apos;s email.</p>
         ) : (
-          <LegacyEditForm item={item} />
+          <LegacyItemForm mode="edit" code={item.id} email={user.email} item={item} />
         )}
-        <p className="muted center mt">
-          <Link href="/dashboard">Back to dashboard</Link>
-        </p>
       </div>
     </main>
   );
