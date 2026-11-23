@@ -45,6 +45,15 @@ EMAIL_FROM=SecureTag <onboarding@resend.dev>
 ```
 Leave blank to disable — in-app realtime alerts still work.
 
+## Security fix to run once
+Paste [`supabase-security-fix.sql`](./supabase-security-fix.sql) into the Supabase SQL Editor and run it.
+It removes a policy that let any logged-in user make themselves an admin.
+(The full schema file already includes it for new projects.)
+
+## Mobile app
+The Expo app lives in [`mobile/`](./mobile/README.md). It needs this site running:
+`npm run dev:mobile` (port 4100, reachable from a phone on the same Wi-Fi).
+
 ## Run
 ```bash
 npm run dev

@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+/* Next.js caches GET fetch() calls made on the server. Database reads must
+   never come from that cache, or a tag keeps showing its old state. */
+const noStoreFetch: typeof fetch = (input, init) => fetch(input, { ...init, cache: "no-store" });
 /**
  * Admin client (service role) — SERVER ONLY.
  * Bypasses Row Level Security. Used for reads/writes after we've checked
@@ -14,7 +17,7 @@ export function getAdminClient() {
       "Missing NEXT_PUBLIC_SUPABASE_URL. Copy .env.local.example to .env.local."
     );
   if (!serviceKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
-  return createClient(url, serviceKey, { auth: { persistSession: false } });
+  return createClient(url, serviceKey, { auth: { persistSession: false }, global: { fetch: noStoreFetch } });
 }
 
 export type Tag = {

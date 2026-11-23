@@ -6,7 +6,8 @@
     "dev": "next dev -p 3100",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "dev:mobile": "next dev -p 4100 -H 0.0.0.0"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",

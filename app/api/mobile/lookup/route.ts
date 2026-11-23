@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       const lat = Number(url.searchParams.get("lat"));
       const lng = Number(url.searchParams.get("lng"));
       const hasPos = url.searchParams.has("lat") && Number.isFinite(lat) && Number.isFinite(lng);
-      await db.from("legacy_scans").insert({
+      if (url.searchParams.get("audit") !== "0") await db.from("legacy_scans").insert({
         code,
         device_info: JSON.stringify({ deviceType: "Mobile", os: url.searchParams.get("os") || "Unknown", browser: "SecureTag app" }),
         ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null,
