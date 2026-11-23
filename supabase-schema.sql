@@ -94,9 +94,13 @@ alter table public.scan_requests enable row level security;
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles
   for select using (id = auth.uid() or public.is_admin());
+-- SECURITY: there is deliberately NO update policy for users. A blanket
+-- "update own row" policy lets anyone run
+--   update profiles set role = 'admin' where id = auth.uid()
+-- from the browser and become an admin. The app only ever writes profiles
+-- server-side with the service role, so users need no write access at all.
 drop policy if exists profiles_update_self on public.profiles;
-create policy profiles_update_self on public.profiles
-  for update using (id = auth.uid());
+revoke insert, update, delete on public.profiles from anon, authenticated;
 
 -- tags: owner sees own tags; admins see all (writes happen server-side via service role)
 drop policy if exists tags_select on public.tags;

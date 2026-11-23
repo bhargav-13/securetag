@@ -239,6 +239,7 @@ export default async function Dashboard({
         </div>
       )}
 
+      {(tags.length > 0 || !user.isAdmin) && (
       <div>
         <div className="section-head">
           <h2>My tags</h2>
@@ -258,6 +259,7 @@ export default async function Dashboard({
           </div>
         )}
       </div>
+      )}
 
       {legacyItems.length > 0 && (
         <div>
@@ -287,8 +289,19 @@ export default async function Dashboard({
 
   /* ---------------- ADMIN ---------------- */
   if (user.isAdmin) {
-    const { data } = await db.from("tags").select("*").order("created_at", { ascending: false });
-    const allTags = (data as Tag[]) ?? [];
+    // PostgREST caps a response at 1,000 rows, so page until we have them all.
+    const allTags: Tag[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db
+        .from("tags")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + 999);
+      if (error) break;
+      allTags.push(...((data as Tag[]) ?? []));
+      if (!data || data.length < 1000) break;
+    }
     const registered = allTags.filter((t) => t.claimed).length;
 
     return (
@@ -311,7 +324,9 @@ export default async function Dashboard({
           <div className="stat-tile amber"><div className="n">{pending.length}</div><div className="l">Pending requests</div></div>
         </div>
 
-        {tags.length > 0 && <div className="stack">{ownerBody}</div>}
+        {/* Admins can own tags and legacy items too; the notices inside
+            (password updated, item saved) must always be able to show. */}
+        <div className="stack">{ownerBody}</div>
 
         <div className="card">
           <div className="section-head" style={{ marginTop: 0 }}>
