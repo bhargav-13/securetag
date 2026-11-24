@@ -85,7 +85,7 @@ To preview in a browser instead: `npm run web`.
 | Variable | Meaning |
 | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Same public values as the website. Never put the service-role key here. |
-| `EXPO_PUBLIC_API_URL` | Leave blank in development. Set to `https://securetag.in` once the website with `/api/mobile` is deployed. |
+| `EXPO_PUBLIC_API_URL` | Leave blank in development. Blank also works in a release build (defaults to `https://www.securetag.in`). Use the `www` address: the bare domain redirects and the login header is lost on the way. |
 | `EXPO_PUBLIC_WEB_URL` | Site the QR codes point to (`https://securetag.in`). |
 
 ## How it fits together
@@ -127,7 +127,7 @@ runs 63 checks through every API flow, and deletes what it created.
 Expo Go is for trying the app. A store release needs a real build:
 
 1. **Deploy the website** so `/api/mobile/*` is live, then set
-   `EXPO_PUBLIC_API_URL=https://securetag.in`.
+   `EXPO_PUBLIC_API_URL=https://www.securetag.in`.
 2. `npx eas-cli@latest init` then `npx eas-cli@latest build --platform android`
    (and `ios`). This also gives the app an EAS project id.
 3. **Push alerts while the app is closed** start working in that build with no

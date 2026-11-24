@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 
    In development the API defaults to the Next.js dev server on the same
    computer that runs `expo start` (port 4100, `npm run dev:mobile`), so a phone on the same Wi-Fi
-   just works. Set EXPO_PUBLIC_API_URL to override (e.g. https://securetag.in). */
+   just works. Set EXPO_PUBLIC_API_URL to override. */
 
 const trim = (v: string | undefined) => (v || '').trim().replace(/\/+$/, '');
 
@@ -33,7 +33,11 @@ function devApiUrl(): string | null {
   return `http://${host}:${DEV_API_PORT}`;
 }
 
-export const API_URL = trim(process.env.EXPO_PUBLIC_API_URL) || devApiUrl() || WEB_URL;
+/* securetag.in redirects to www, and a redirect to another host drops the
+   login header on the way. So API calls go straight to www. */
+const PROD_API_URL = 'https://www.securetag.in';
+
+export const API_URL = trim(process.env.EXPO_PUBLIC_API_URL) || devApiUrl() || PROD_API_URL;
 
 export const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
