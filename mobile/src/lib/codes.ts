@@ -37,6 +37,13 @@ export const REASONS: { key: string; label: string; path: string; urgent?: boole
   { key: 'Lost & found', label: 'Lost & found', path: 'M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z M9.5 10a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0' },
 ];
 
+export const isUrgentReason = (reason: string | null | undefined) => /emerg|accid/i.test(reason || '');
+
+const FALLBACK_REASON = REASONS[0];
+/** Glyph + urgency for a stored reason (falls back for old free-text ones). */
+export const reasonInfo = (reason: string | null | undefined) =>
+  REASONS.find((r) => r.key === reason) ?? { ...FALLBACK_REASON, key: reason || 'Contact request', label: reason || 'Contact request', urgent: isUrgentReason(reason) };
+
 /** The old app's "intended use" list (key stored in item_type → label). */
 export const ITEM_TYPES: Record<string, string> = {
   TRAVELLUGGAGE: 'Travel Luggage',

@@ -55,7 +55,24 @@ export type Account = {
   isAdmin: boolean;
 };
 
+/** Kinds of notification (see lib/notifications.ts and the website's lib/push.ts). */
+export type NotifyKind = 'request' | 'emergency' | 'lost' | 'location' | 'reply' | 'reminder';
+
+/** The kinds a person can switch off. Emergencies always get through. */
+export type NotifyPrefs = Record<'request' | 'lost' | 'location' | 'reply' | 'reminder', boolean>;
+
+/** A finder scanned one of the owner's items (luggage, wallet…). */
+export type ItemScan = {
+  id: string;
+  code: string;
+  lat: number | null;
+  lng: number | null;
+  scanned_on: string;
+};
+
 export type Me = {
+  prefs?: NotifyPrefs;
+  itemScans?: ItemScan[];
   user: Account;
   tags: Tag[];
   legacyItems: LegacyItem[];

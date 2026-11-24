@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { confirm } from '@/components/cards';
 import { api, ApiError } from '@/lib/api';
@@ -10,30 +10,18 @@ import { WEB_URL } from '@/lib/config';
 import { buzz } from '@/lib/device';
 import { useSession } from '@/state/session';
 import { Field, Form, PhoneField, ReadOnly, type Values } from '@/ui/form';
-import { Icon, type IconName } from '@/ui/icons';
-import { Button, Card, Eyebrow, H1, H2, Muted, Notice, Screen, Small } from '@/ui/kit';
+import { Button, Card, Eyebrow, H1, H2, ListRow, Muted, Notice, Screen, Small } from '@/ui/kit';
 import { C } from '@/ui/theme';
-
-function LinkRow({ icon, label, onPress, last }: { icon: IconName; label: string; onPress: () => void; last?: boolean }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="link"
-      style={({ pressed }) => [styles.linkRow, !last && styles.linkRowBorder, pressed && { opacity: 0.6 }]}>
-      <Icon name={icon} size={19} color={C.brand} />
-      <Text style={styles.linkLabel}>{label}</Text>
-      <Icon name="chevronRight" size={18} color={C.muted} />
-    </Pressable>
-  );
-}
 
 function Links() {
   return (
-    <Card style={{ paddingVertical: 6 }}>
-      <LinkRow icon="external" label="Open securetag.in" onPress={() => WebBrowser.openBrowserAsync(WEB_URL).catch(() => {})} />
-      <LinkRow
+    <Card style={styles.list}>
+      <ListRow icon="external" label="Open securetag.in" role="link" onPress={() => WebBrowser.openBrowserAsync(WEB_URL).catch(() => {})} />
+      <ListRow
         icon="mail"
         label="Contact support"
+        detail="support@securetag.in"
+        role="link"
         onPress={() => Linking.openURL('mailto:support@securetag.in?subject=SecureTag%20app').catch(() => {})}
         last
       />
@@ -43,7 +31,7 @@ function Links() {
 
 export default function Account() {
   const router = useRouter();
-  const { session, account, refresh, signOut } = useSession();
+  const { session, account, tags, items, prefs, refresh, signOut } = useSession();
   // What's saved on the account, and the person's unsaved edits on top of it.
   const [edits, setEdits] = useState<Values | null>(null);
   const values: Values = edits ?? { full_name: account?.fullName ?? '', phone: account?.phone ?? '' };
@@ -71,6 +59,17 @@ export default function Account() {
       </Screen>
     );
   }
+
+  const email = account?.email ?? session.user.email ?? '';
+  const initials =
+    ((account?.fullName || '').trim() || email)
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase())
+      .join('') || 'S';
+  const total = tags.length + items.length;
+  const mutedCount = Object.values(prefs).filter((on) => !on).length;
 
   const dirty = !!account && (values.full_name !== (account.fullName ?? '') || values.phone !== (account.phone ?? ''));
 
@@ -102,8 +101,32 @@ export default function Account() {
 
   return (
     <Screen edges="top">
-      <Eyebrow>Account</Eyebrow>
-      <H1 style={{ marginTop: 4, marginBottom: 0 }}>Your account</H1>
+      <View style={styles.profile}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initials}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text accessibilityRole="header" style={styles.profileName} numberOfLines={1}>
+            {account?.fullName || 'Your account'}
+          </Text>
+          <Text style={styles.profileEmail} numberOfLines={1}>
+            {email}
+          </Text>
+          <Text style={styles.profileMeta}>
+            {total === 0 ? 'No tags yet' : `${total} ${total === 1 ? 'tag' : 'tags'} protected`}
+          </Text>
+        </View>
+      </View>
+
+      <Card style={styles.list}>
+        <ListRow
+          icon="bell"
+          label="Notifications"
+          detail={mutedCount ? `${mutedCount} ${mutedCount === 1 ? 'type' : 'types'} turned off` : 'All alerts on'}
+          onPress={() => router.push('/notifications')}
+        />
+        <ListRow icon="key" label="Change password" onPress={() => router.push('/password')} last />
+      </Card>
 
       <Card>
         <H2>Profile</H2>
@@ -119,7 +142,7 @@ export default function Account() {
           <View style={{ gap: 14 }}>
             <Field name="full_name" label="Your name" required placeholder="Full name" maxLength={80} autoCapitalize="words" autoComplete="name" />
             <PhoneField name="phone" label="Phone number" hint="10-digit Indian numbers get +91 added." />
-            <ReadOnly label="Email" value={account?.email ?? session.user.email ?? ''} hint="Your login. It can't be changed here." />
+            <ReadOnly label="Email" value={email} hint="Your login. It can't be changed here." />
           </View>
         </Form>
         {saved ? (
@@ -135,15 +158,6 @@ export default function Account() {
         <Button label="Save profile" onPress={save} loading={saving} disabled={!dirty} style={{ marginTop: 16 }} />
       </Card>
 
-      <Card style={{ paddingVertical: 6 }}>
-        <LinkRow
-          icon="lock"
-          label="Change password"
-          onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/forgot`).catch(() => {})}
-          last
-        />
-      </Card>
-
       <Links />
 
       <Button label="Log out" icon="logout" variant="danger" onPress={leave} loading={leaving} />
@@ -153,7 +167,11 @@ export default function Account() {
 }
 
 const styles = StyleSheet.create({
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52 },
-  linkRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
-  linkLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: C.text },
+  list: { paddingVertical: 4, paddingHorizontal: 16 },
+  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4 },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: C.white, fontSize: 22, fontWeight: '800', letterSpacing: 0.5 },
+  profileName: { fontSize: 21, lineHeight: 26, fontWeight: '800', color: C.text, letterSpacing: -0.4 },
+  profileEmail: { fontSize: 13.5, color: C.muted, marginTop: 1 },
+  profileMeta: { fontSize: 12.5, color: C.brand, fontWeight: '700', marginTop: 4 },
 });

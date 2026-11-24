@@ -3,6 +3,12 @@
 Production build: Next.js + Supabase (Auth, Postgres, RLS, Realtime). Consent-
 gated contact sharing, Lost Mode, DB-driven roles, and email alerts.
 
+## Mobile app notifications (optional SQL)
+
+Run `supabase-notifications.sql` once in Supabase → SQL Editor. It adds one
+column so a person who scans a tag **from the app** is notified when the owner
+answers, even with the app closed. Everything else works without it.
+
 ## The flow
 - **Landing** → product info + Login/Register.
 - **Admin** (role in DB) → `/dashboard`: all tags, generate codes, bulk ZIP /

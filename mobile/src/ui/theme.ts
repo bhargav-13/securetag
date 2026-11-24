@@ -26,6 +26,15 @@ export const C = {
 
 export const GRADIENT = ['#4e46dc', '#6366f1', '#7c83f7'] as const;
 
+/** Hero / banner backgrounds by mood. */
+export const GRADIENTS = {
+  brand: GRADIENT,
+  amber: ['#b45309', '#d97706', '#f59e0b'],
+  red: ['#b91c1c', '#dc2626', '#ef4444'],
+  green: ['#15803d', '#16a34a', '#22c55e'],
+} as const;
+export type Mood = keyof typeof GRADIENTS;
+
 export const R = { sm: 10, md: 12, lg: 16, xl: 22, pill: 999 } as const;
 
 export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;

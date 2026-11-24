@@ -227,6 +227,37 @@ try {
   u = await admin.auth.admin.getUserById(owner.id);
   check("push token removed on sign-out", r.status === 200 && !u.data.user?.app_metadata?.expo_push_tokens?.includes(fake));
 
+  console.log("\nNotifications");
+  r = await call("GET", "/api/mobile/me", { token: owner.token });
+  check(
+    "every notification type starts switched on",
+    !!r.json.prefs && Object.keys(r.json.prefs).length === 5 && Object.values(r.json.prefs).every((v) => v === true)
+  );
+  check("owner sees the finder's scan of their item", r.json.itemScans?.some((x) => x.code === ITEM));
+  r = await call("PUT", "/api/mobile/prefs", { body: { location: false } });
+  check("changing notification settings needs login", r.status === 401);
+  r = await call("PUT", "/api/mobile/prefs", { token: owner.token, body: { location: false, emergency: false, junk: 1 } });
+  check(
+    "a type can be switched off; unknown keys are ignored",
+    r.status === 200 && r.json.prefs?.location === false && r.json.prefs?.request === true && !("emergency" in r.json.prefs) && !("junk" in r.json.prefs)
+  );
+  r = await call("GET", "/api/mobile/me", { token: owner.token });
+  check("the setting is remembered", r.json.prefs?.location === false);
+  r = await call("GET", "/api/mobile/me", { token: other.token });
+  check("other accounts keep their own settings", r.json.prefs?.location === true);
+  await call("POST", "/api/mobile/push", { token: owner.token, body: { token: fake } });
+  await call("PUT", "/api/mobile/prefs", { token: owner.token, body: { reminder: false } });
+  u = await admin.auth.admin.getUserById(owner.id);
+  check("saving settings leaves push tokens alone", u.data.user?.app_metadata?.expo_push_tokens?.includes(fake));
+  await call("DELETE", "/api/mobile/push", { token: owner.token, body: { token: fake } });
+  r = await call("POST", "/api/mobile/scan", { body: { tagId: TAG, reason: "Parking issue", pushToken: fake } });
+  const req5 = r.json.requestId;
+  check("a request that carries the scanner's push token is accepted", r.status === 200 && r.json.status === "pending");
+  const seen = await owner.client.from("scan_requests").select("*").eq("id", req5).maybeSingle();
+  check("the owner cannot read the scanner's push token", !!seen.data && !JSON.stringify(seen.data).includes("TESTtesttest"));
+  r = await call("POST", `/api/mobile/scan/${req5}`, { token: owner.token, body: { decision: "accepted" } });
+  check("owner answers it", r.status === 200);
+
   console.log("\nDatabase security");
   await other.client.from("profiles").update({ role: "admin" }).eq("id", other.id);
   const prof = await admin.from("profiles").select("role").eq("id", other.id).maybeSingle();

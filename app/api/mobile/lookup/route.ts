@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getBearerUser, json, fail } from "@/lib/mobile";
 import { LEGACY_CODE_RE } from "@/lib/legacy";
+import { sendPushToUser } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,18 @@ export async function GET(req: NextRequest) {
       const lat = Number(url.searchParams.get("lat"));
       const lng = Number(url.searchParams.get("lng"));
       const hasPos = url.searchParams.has("lat") && Number.isFinite(lat) && Number.isFinite(lng);
-      if (url.searchParams.get("audit") !== "0") await db.from("legacy_scans").insert({
+      const audit = url.searchParams.get("audit") !== "0";
+      // One alert per burst of scans, not one per reload.
+      const recent = audit
+        ? (
+            await db
+              .from("legacy_scans")
+              .select("id", { count: "exact", head: true })
+              .eq("code", code)
+              .gte("scanned_on", new Date(Date.now() - 2 * 60 * 1000).toISOString())
+          ).count ?? 0
+        : 0;
+      if (audit) await db.from("legacy_scans").insert({
         code,
         device_info: JSON.stringify({ deviceType: "Mobile", os: url.searchParams.get("os") || "Unknown", browser: "SecureTag app" }),
         ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null,
@@ -55,6 +67,8 @@ export async function GET(req: NextRequest) {
         lng: hasPos ? lng : null,
         scanned_on: new Date().toISOString(),
       });
+
+      if (audit && recent === 0) await alertItemOwner(item, hasPos);
 
       if (!item.lost_mode) return json({ kind: "legacy", code, state: "secured", item_name: item.item_name });
       const pref = String(item.pref_contact || "").toUpperCase();
@@ -73,4 +87,33 @@ export async function GET(req: NextRequest) {
   }
 
   return json({ kind: "notfound" });
+}
+
+/** Tells the item's owner (if they use the app) that a finder scanned it. */
+async function alertItemOwner(
+  item: { id: string; item_name: string | null; email: string | null; lost_mode: boolean | null },
+  hasLocation: boolean
+) {
+  const email = (item.email || "").trim();
+  if (!email) return;
+  try {
+    const { data: owners } = await getAdminClient().from("profiles").select("id,email").ilike("email", email).limit(5);
+    const owner = owners?.find((o) => (o.email || "").trim().toLowerCase() === email.toLowerCase());
+    if (!owner) return;
+    const name = item.item_name || "Your item";
+    const where = hasLocation ? " Their location is attached." : "";
+    await sendPushToUser(
+      owner.id,
+      "lost",
+      item.lost_mode
+        ? { title: `${name} was found and scanned`, body: `The finder can see your contact details.${where}`, data: { code: item.id, kind: "legacy" } }
+        : {
+            title: `${name} was just scanned`,
+            body: `Your details stayed private. If it is missing, turn on Lost Mode.${where}`,
+            data: { code: item.id, kind: "legacy" },
+          }
+    );
+  } catch (e) {
+    console.error("[push] item alert failed", e);
+  }
 }

@@ -1,14 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from '@/lib/api';
 import { REASONS } from '@/lib/codes';
 import { buzz, call, getPosition } from '@/lib/device';
+import { getPushToken, notifyNow, prepareNotifications } from '@/lib/notifications';
 import type { Contact } from '@/lib/types';
 import { Icon, PathIcon, ShieldMark } from '@/ui/icons';
 import { Bold, Button, Card, Fact, H1, Muted, Notice, Pill, Small } from '@/ui/kit';
 import { C, R } from '@/ui/theme';
+
+/** Resolves with the promise, or null if it takes longer than `ms`. */
+const within = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+  Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+
+/** The answer came in while the scanner was looking at another app. */
+function tellScanner(accepted: boolean, tagId: string, requestId: string) {
+  if (AppState.currentState === 'active') return;
+  notifyNow(
+    'reply',
+    accepted ? 'The owner shared their contact' : 'The owner declined',
+    accepted ? 'Open SecureTag to call them.' : 'They chose not to share their contact this time.',
+    { tagId, requestId }
+  );
+}
 
 const pendingKey = (tagId: string) => `securetag:pending:${tagId}`;
 const forget = (tagId: string) => AsyncStorage.removeItem(pendingKey(tagId)).catch(() => {});
@@ -172,6 +188,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
             setContact(data.contact);
             setPhase('accepted');
             buzz('success');
+            tellScanner(true, tagId, requestId);
           } else {
             setErr('The owner accepted, but their details could not be loaded. Please scan again.');
             setPhase('error');
@@ -180,6 +197,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
           forget(tagId);
           setPhase('declined');
           buzz('warning');
+          tellScanner(false, tagId, requestId);
         } else if (data.status === 'notfound') {
           forget(tagId);
           setPhase('reason');
@@ -201,6 +219,12 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
     setPhase('submitting');
     // Location first, so the owner's alert says where the car is.
     const pos = await getPosition();
+    // So this phone hears the owner's answer even if the app is closed.
+    // Never holds the request up: a slow or unanswered prompt is skipped.
+    const pushToken = await within(
+      prepareNotifications().then(() => getPushToken({ ask: false })),
+      4000
+    );
     try {
       const res = await api.createScan({
         tagId,
@@ -208,6 +232,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
         message: message.trim() || undefined,
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
+        pushToken,
       });
       if (!alive.current) return;
       setRequestId(res.requestId);
@@ -279,7 +304,7 @@ export default function RequestFlow({ tagId, lostMode }: { tagId: string; lostMo
           number stays private until they tap <Bold>Accept</Bold>.
         </Muted>
         <Small center style={{ marginTop: 10 }}>
-          This usually takes a moment. You can leave this screen and come back.
+          This usually takes a moment. You can leave this screen: we&apos;ll notify you when they answer.
         </Small>
         <Button label="Cancel and start over" variant="ghost" size="sm" onPress={startOver} style={{ marginTop: 16 }} />
       </Waiting>

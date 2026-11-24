@@ -1,6 +1,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
-import { sendPushToUser } from "@/lib/push";
+import { sendPushToUser, sendPushToToken, sealToken, openToken, type PushKind } from "@/lib/push";
 
 /* The scan-request flow, shared by the website's server actions and the
    mobile app's API routes. */
@@ -25,6 +25,13 @@ export type ScanResult = {
   error?: string;
 };
 
+/* `scan_requests.scanner_push_token` is an optional column (see
+   supabase-notifications.sql). Until it exists the scanner simply gets no
+   push when the owner answers; everything else works the same. */
+let tokenColumn: boolean | null = null;
+const missingColumn = (e: { code?: string; message?: string } | null) =>
+  !!e && (e.code === "PGRST204" || e.code === "42703" || /scanner_push_token/.test(e.message || ""));
+
 const clip = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
 const coord = (v: unknown, max: number) =>
   typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= max ? v : null;
@@ -41,6 +48,8 @@ export async function createScan(input: {
   message?: string;
   lat?: number | null;
   lng?: number | null;
+  /** Expo push token of the scanner's phone, to tell them the owner's answer. */
+  pushToken?: unknown;
 }): Promise<ScanResult> {
   const db = getAdminClient();
   const { data: tag } = await db.from("tags").select("*").eq("id", clip(input.tagId, 40)).maybeSingle();
@@ -55,20 +64,27 @@ export async function createScan(input: {
   const immediate = Boolean(tag.lost_mode) || emergency;
   const status = immediate ? "auto" : "pending";
 
-  const { data: inserted, error } = await db
+  const row: Record<string, unknown> = {
+    tag_id: tag.id,
+    owner_user_id: tag.owner_user_id,
+    reason,
+    scanner_message: message,
+    scanner_lat: lat,
+    scanner_lng: lng,
+    status,
+    responded_at: immediate ? new Date().toISOString() : null,
+  };
+  // Only a request that waits for an answer needs the scanner's token.
+  const sealed = !immediate && tokenColumn !== false ? sealToken(input.pushToken) : null;
+  let { data: inserted, error } = await db
     .from("scan_requests")
-    .insert({
-      tag_id: tag.id,
-      owner_user_id: tag.owner_user_id,
-      reason,
-      scanner_message: message,
-      scanner_lat: lat,
-      scanner_lng: lng,
-      status,
-      responded_at: immediate ? new Date().toISOString() : null,
-    })
+    .insert(sealed ? { ...row, scanner_push_token: sealed } : row)
     .select("id")
     .single();
+  if (sealed && missingColumn(error)) {
+    tokenColumn = false;
+    ({ data: inserted, error } = await db.from("scan_requests").insert(row).select("id").single());
+  } else if (sealed && !error) tokenColumn = true;
   if (error || !inserted) return { requestId: "", status: "pending", error: error?.message || "Failed." };
 
   // Alert the owner (always) + emergency/alt contacts (if emergency) across
@@ -78,16 +94,14 @@ export async function createScan(input: {
     const { data: profile } = await db.from("profiles").select("email").eq("id", tag.owner_user_id).maybeSingle();
     ownerEmail = profile?.email ?? null;
   }
+  const kind: PushKind = emergency ? "emergency" : tag.lost_mode ? "lost" : "request";
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3100";
   const vehicle = [tag.car_model, tag.plate_number].filter(Boolean).join(" · ");
   await Promise.allSettled([
     notifyOnScan({ tag, ownerEmail, reason, message, lat, lng, baseUrl }),
-    sendPushToUser(tag.owner_user_id, {
-      title: immediate ? `${reason}: contact shared` : `${reason}: someone needs to reach you`,
-      body:
-        (vehicle ? `${vehicle}. ` : "") +
-        (message ? `"${message}"` : immediate ? "Your contact was shared automatically." : "Tap to accept or decline."),
-      data: { type: "scan", requestId: inserted.id, tagId: tag.id },
+    sendPushToUser(tag.owner_user_id, kind, {
+      ...scanPushText(kind, { reason, vehicle, message, hasLocation: lat != null && lng != null }),
+      data: { requestId: inserted.id, tagId: tag.id },
     }),
   ]);
 
@@ -112,14 +126,53 @@ export async function createScan(input: {
   return { requestId: inserted.id, status: "pending" };
 }
 
+/** What the owner's phone shows for a new scan. */
+export function scanPushText(
+  kind: PushKind,
+  s: { reason: string; vehicle: string; message: string | null; hasLocation: boolean }
+): { title: string; body: string } {
+  const what = s.vehicle || "your vehicle";
+  const note = s.message ? ` "${s.message}"` : "";
+  const where = s.hasLocation ? " Their location is attached." : "";
+  if (kind === "emergency")
+    return {
+      title: `${s.reason} reported: ${what}`,
+      body: `Your contact and emergency contact were shared right away.${note}${where}`,
+    };
+  if (kind === "lost")
+    return {
+      title: `Your lost vehicle was scanned`,
+      body: `${s.vehicle ? `${s.vehicle}. ` : ""}The finder can see your contact.${note}${where}`,
+    };
+  return {
+    title: `${s.reason}: someone needs to reach you`,
+    body: `${s.vehicle ? `${s.vehicle}. ` : ""}${s.message ? `"${s.message}" ` : ""}Accept to share your number, or decline.`,
+  };
+}
+
 /** Scanner consents to share their location (used mainly for Lost Mode). */
 export async function attachLocation(requestId: string, lat: unknown, lng: unknown) {
   const la = coord(lat, 90);
   const ln = coord(lng, 180);
   if (!requestId || la == null || ln == null) return false;
   const db = getAdminClient();
+  const { data: before } = await db
+    .from("scan_requests")
+    .select("owner_user_id, tag_id, scanner_lat, scanner_lng")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (!before) return false;
   const { error } = await db.from("scan_requests").update({ scanner_lat: la, scanner_lng: ln }).eq("id", requestId);
-  return !error;
+  if (error) return false;
+  // Tell the owner once, the first time a location arrives.
+  if (before.scanner_lat == null && before.scanner_lng == null) {
+    await sendPushToUser(before.owner_user_id, "location", {
+      title: "The scanner shared their location",
+      body: "Open to see where your vehicle is on the map.",
+      data: { requestId, tagId: before.tag_id },
+    });
+  }
+  return true;
 }
 
 /** Owner (or an admin) accepts or declines a pending request. */
@@ -144,5 +197,37 @@ export async function respondScan(
     .update({ status: decision, responded_at: new Date().toISOString() })
     .eq("id", requestId)
     .eq("status", "pending");
-  return error ? { ok: false, error: error.message } : { ok: true };
+  if (error) return { ok: false, error: error.message };
+  await notifyScanner(requestId, decision as "accepted" | "declined");
+  return { ok: true };
+}
+
+/** Tells the scanner's phone the owner answered, if it left a token. */
+async function notifyScanner(requestId: string, decision: "accepted" | "declined") {
+  if (tokenColumn === false) return;
+  try {
+    const { data, error } = await getAdminClient()
+      .from("scan_requests")
+      .select("tag_id, scanner_push_token")
+      .eq("id", requestId)
+      .maybeSingle();
+    if (missingColumn(error)) {
+      tokenColumn = false;
+      return;
+    }
+    const row = data as { tag_id: string; scanner_push_token: string | null } | null;
+    const token = openToken(row?.scanner_push_token);
+    if (!row || !token) return;
+    await sendPushToToken(
+      token,
+      "reply",
+      decision === "accepted"
+        ? { title: "The owner shared their contact", body: "Open SecureTag to call them.", data: { requestId, tagId: row.tag_id } }
+        : { title: "The owner declined", body: "They chose not to share their contact this time.", data: { requestId, tagId: row.tag_id } }
+    );
+    // The token has done its job; don't keep it.
+    await getAdminClient().from("scan_requests").update({ scanner_push_token: null }).eq("id", requestId);
+  } catch (e) {
+    console.error("[push] scanner reply failed", e);
+  }
 }

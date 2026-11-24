@@ -62,7 +62,11 @@
       [
         "expo-notifications",
         {
-          "color": "#4e46dc"
+          "color": "#4e46dc",
+          "defaultChannel": "requests",
+          "sounds": [
+            "./assets/sounds/emergency.wav"
+          ]
         }
       ]
     ],

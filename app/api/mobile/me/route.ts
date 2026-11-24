@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getBearerUser, json, fail, unauthorized, readBody } from "@/lib/mobile";
 import { normalizePhone } from "@/lib/forms";
+import { getNotifyPrefs } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!user) return unauthorized();
   const db = getAdminClient();
 
-  const [tags, scans, legacy] = await Promise.all([
+  const [tags, scans, legacy, prefs] = await Promise.all([
     db.from("tags").select("*").eq("owner_user_id", user.id).order("claimed_at", { ascending: false }),
     db
       .from("scan_requests")
@@ -24,13 +25,30 @@ export async function GET(req: NextRequest) {
       .limit(100),
     // Legacy items are matched by the owner's VERIFIED email, case-insensitively.
     db.from("legacy_tags").select(LEGACY_COLS).ilike("email", user.email),
+    getNotifyPrefs(user.id),
   ]);
   if (tags.error) return fail(`Could not load your tags: ${tags.error.message}`, 500);
 
   const mine = user.email.trim().toLowerCase();
   const legacyItems = (legacy.data ?? []).filter((r) => r.claimed && r.email?.trim().toLowerCase() === mine);
 
+  // Recent scans of the owner's items (finders only; the owner's own scans
+  // are never recorded).
+  const codes = legacyItems.map((r) => r.id);
+  const itemScans = codes.length
+    ? (
+        await db
+          .from("legacy_scans")
+          .select("id,code,lat,lng,scanned_on")
+          .in("code", codes)
+          .order("scanned_on", { ascending: false })
+          .limit(50)
+      ).data ?? []
+    : [];
+
   return json({
+    prefs,
+    itemScans,
     user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, isAdmin: user.isAdmin },
     tags: tags.data ?? [],
     legacyItems,

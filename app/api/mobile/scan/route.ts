@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     message: typeof body.message === "string" ? body.message : undefined,
     lat: typeof body.lat === "number" ? body.lat : null,
     lng: typeof body.lng === "number" ? body.lng : null,
+    pushToken: body.pushToken,
   });
   if (res.error) return fail(res.error, 400);
   return json(res);

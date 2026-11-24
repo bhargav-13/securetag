@@ -74,6 +74,8 @@ create table if not exists public.scan_requests (
   created_at      timestamptz not null default now(),
   responded_at    timestamptz
 );
+-- Optional: the app scanner's push token (encrypted), see supabase-notifications.sql
+alter table public.scan_requests add column if not exists scanner_push_token text;
 create index if not exists scan_requests_owner_idx on public.scan_requests(owner_user_id, status);
 
 -- ---------- role helper (security definer avoids RLS recursion) ----------

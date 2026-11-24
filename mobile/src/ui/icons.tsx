@@ -34,6 +34,13 @@ const PATHS = {
   external: 'M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   eye: 'M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12Z M8.8 12a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0-6.4 0',
   plus: 'M12 5v14M5 12h14',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  shieldCheck: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z M9 12l2 2 4-4',
+  key: 'M15 7a4 4 0 1 1-3.9 5H8v3H5v3H2v-3l7.1-7.1A4 4 0 0 1 15 7z M16 8h.01',
+  settings:
+    'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M16 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+  send: 'M22 2 11 13 M22 2l-7 20-4-9-9-4 20-7z',
+  info: 'M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 11v5 M12 8h.01',
 } as const;
 
 export type IconName = keyof typeof PATHS;

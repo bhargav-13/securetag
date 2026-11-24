@@ -8,10 +8,12 @@ and printing tags, managing users) stays on the website.
 
 | Tab | Logged out | Logged in |
 | --- | --- | --- |
-| **Home** | Intro, log in / register | Stats, contact requests to answer, your vehicle tags and items |
+| **Home** | Intro, log in / register | Status at a glance, requests waiting for you, your vehicles and items, recent scans |
 | **Scan** | QR scanner (camera, torch) or type the code | Same |
-| **Alerts** | Prompt to log in | Requests waiting for you + scan history with the scanner's location |
-| **Account** | Log in / register | Name and phone, change password, support, log out |
+| **Alerts** | Prompt to log in | Requests waiting for you + a timeline of every scan; tap one for the map and details |
+| **Account** | Log in / register | Notification settings, change password, name and phone, support, log out |
+
+A three-slide introduction shows the first time the app is opened.
 
 Scanning (or typing) a code opens the right screen for it:
 
@@ -23,9 +25,30 @@ Scanning (or typing) a code opens the right screen for it:
 - **Someone's item tag** (luggage, wallet…) → "secured, contact support", or
   the owner's phone / email if they marked it lost.
 
-New requests reach the owner **live while the app is open** (Supabase Realtime,
-with a 15-second polling fallback) as an in-app banner, a notification and a
-badge on the Alerts tab.
+## Notifications
+
+| Notification | When | Who | Notes |
+| --- | --- | --- | --- |
+| **Contact request** | A vehicle tag is scanned and a reason picked | Owner | Accept / Decline buttons on the notification |
+| **Emergency or accident** | The reason is Emergency or Accident | Owner | Own channel and sound; cannot be switched off |
+| **Lost tag / item scanned** | A tag in Lost Mode, or any of the owner's items, is scanned | Owner | Opens the scan with the map |
+| **Location shared** | The scanner shares their location afterwards | Owner | Quiet |
+| **Owner replied** | The owner accepts or declines | The scanner's phone | Needs `supabase-notifications.sql` to work while the app is closed |
+| **Lost Mode reminder** | Lost Mode has been on for a week | Owner | Scheduled on the phone, repeats weekly |
+
+Each type except emergencies has a switch under **Account → Notifications**
+(saved on the account, so it follows the person to every phone). Android gets
+one channel per type, so sound and vibration can be tuned in system settings.
+
+While the app is open, alerts arrive live (Supabase Realtime, with a 15-second
+polling fallback) as an in-app banner plus a notification, and the Alerts tab
+and app icon show a badge. While it is closed they arrive as push
+notifications — in a real build only, see "Before publishing" below.
+
+The wording and routing live in two places that must stay in step:
+`lib/push.ts` + `lib/scan.ts` on the website (what is sent) and
+`src/lib/notifications.ts` + `src/state/session.tsx` in the app (channels,
+buttons, live alerts).
 
 ## Run it on your phone (Expo Go)
 
@@ -79,11 +102,12 @@ there is one place to change behaviour. API routes are in `app/api/mobile/`;
 the scan logic shared with the website is `lib/scan.ts`.
 
 ```
-src/app/            screens (expo-router): (tabs)/, login, register,
-                    tag/[code], tag-form, item-form
+src/app/            screens (expo-router): (tabs)/, welcome, login, register,
+                    tag/[code], request/[id], tag-form, item-form,
+                    notifications, password
 src/components/     RequestFlow, cards (tag / item / request), MapPreview, AlertBanner
 src/state/          session.tsx — who is logged in + their tags, items, requests
-src/lib/            api, supabase, config, device (location, notifications), codes
+src/lib/            api, supabase, config, notifications, device (location, haptics), codes
 src/ui/             theme (website colours), kit (buttons, cards…), form, icons
 ```
 
@@ -96,7 +120,7 @@ node ../scripts/test-mobile-api.mjs   # from mobile/, with the website running
 ```
 
 The last one creates throwaway TEST accounts and tags in the real database,
-runs 53 checks through every API flow, and deletes what it created.
+runs 63 checks through every API flow, and deletes what it created.
 
 ## Before publishing to the stores
 
@@ -110,5 +134,8 @@ Expo Go is for trying the app. A store release needs a real build:
    code change: the app registers an Expo push token and the website already
    sends to it on every scan. They cannot work in Expo Go on Android (an Expo
    Go limitation), and need the project id from step 2. Android additionally
-   needs FCM credentials added in the EAS dashboard.
+   needs a Firebase project: put its `google-services.json` in `mobile/`, set
+   `android.googleServicesFile` in `app.json`, and upload the FCM V1 service
+   account key in the EAS dashboard. The emergency sound
+   (`assets/sounds/emergency.wav`) is also only bundled in a real build.
 4. App id is `in.securetag.app` (change in `app.json` if you prefer another).

@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from './icons';
-import { buttonShadow, C, GRADIENT, MAX_WIDTH, R, S, shadow } from './theme';
+import { buttonShadow, C, GRADIENT, GRADIENTS, MAX_WIDTH, R, S, shadow, type Mood } from './theme';
 
 /* ------------------------------- layout ------------------------------- */
 
@@ -284,11 +285,139 @@ export function Loading({ label }: { label?: string }) {
 }
 
 /** Gradient hero panel used at the top of the home and welcome screens. */
-export function Hero({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Hero({ children, style, mood = 'brand' }: { children: ReactNode; style?: StyleProp<ViewStyle>; mood?: Mood }) {
   return (
-    <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, style]}>
+    <LinearGradient colors={GRADIENTS[mood]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, style]}>
+      {/* Soft rings in the corner, like the website's hero. */}
+      <View pointerEvents="none" style={styles.heroRingA} />
+      <View pointerEvents="none" style={styles.heroRingB} />
       {children}
     </LinearGradient>
+  );
+}
+
+/** Rounded square holding an icon; the anchor of most rows and cards. */
+export function IconTile({
+  icon,
+  tone = 'brand',
+  size = 44,
+  children,
+}: {
+  icon?: IconName;
+  tone?: Tone;
+  size?: number;
+  children?: ReactNode;
+}) {
+  const t = TONES[tone];
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.3,
+        backgroundColor: tone === 'brand' ? C.brandSoft : t.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      {children ?? (icon ? <Icon name={icon} size={size * 0.46} color={tone === 'brand' ? C.brand : t.fg} /> : null)}
+    </View>
+  );
+}
+
+/** A vehicle number, drawn like the plate itself. */
+export function Plate({ number, small }: { number: string; small?: boolean }) {
+  return (
+    <View style={[styles.plate, small && styles.plateSm]} accessibilityLabel={`Number plate ${number}`}>
+      <View style={styles.plateStripe} />
+      <Text style={[styles.plateText, small && { fontSize: 12.5 }]} numberOfLines={1}>
+        {number.toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+/** Settings-style row: icon, label, optional detail, then a chevron or control. */
+export function ListRow({
+  icon,
+  label,
+  detail,
+  onPress,
+  last,
+  right,
+  tone = 'brand',
+  role = 'button',
+}: {
+  icon: IconName;
+  label: string;
+  detail?: string;
+  onPress?: () => void;
+  last?: boolean;
+  right?: ReactNode;
+  tone?: Tone;
+  role?: 'button' | 'link';
+}) {
+  const body = (
+    <>
+      <IconTile icon={icon} tone={tone} size={36} />
+      <View style={styles.flexFill}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+      </View>
+      {right ?? (onPress ? <Icon name="chevronRight" size={18} color={C.placeholder} /> : null)}
+    </>
+  );
+  const style = [styles.listRow, !last && styles.listRowBorder];
+  if (!onPress) return <View style={style}>{body}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={role}
+      accessibilityLabel={label}
+      style={({ pressed }) => [style, pressed && { opacity: 0.6 }]}>
+      {body}
+    </Pressable>
+  );
+}
+
+/** Grey placeholder block that gently pulses while content loads. */
+export function Skeleton({
+  height = 16,
+  width = '100%',
+  radius = 8,
+  style,
+}: {
+  height?: number;
+  width?: number | `${number}%`;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [pulse] = useState(() => new Animated.Value(0.45));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[{ height, width, borderRadius: radius, backgroundColor: '#e3e5f3', opacity: pulse }, style]} />;
+}
+
+/** Stand-in for a tag or request card. */
+export function SkeletonCard() {
+  return (
+    <View style={styles.card} accessibilityRole="progressbar" accessibilityLabel="Loading">
+      <View style={styles.row}>
+        <Skeleton height={44} width={44} radius={13} />
+        <View style={[styles.flexFill, { gap: 8 }]}>
+          <Skeleton height={15} width="60%" />
+          <Skeleton height={12} width="40%" />
+        </View>
+      </View>
+      <Skeleton height={38} radius={R.md} style={{ marginTop: 16 }} />
+    </View>
   );
 }
 
@@ -391,4 +520,34 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xxl, backgroundColor: C.bg },
 
   hero: { borderRadius: R.xl, padding: S.xl, overflow: 'hidden', ...shadow },
+  heroRingA: { position: 'absolute', width: 220, height: 220, borderRadius: 110, right: -80, top: -90, backgroundColor: 'rgba(255,255,255,0.10)' },
+  heroRingB: { position: 'absolute', width: 130, height: 130, borderRadius: 65, right: -30, top: -40, backgroundColor: 'rgba(255,255,255,0.10)' },
+  flexFill: { flex: 1 },
+
+  plate: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    alignSelf: 'flex-start',
+    backgroundColor: '#fffdf2',
+    borderWidth: 1.5,
+    borderColor: '#1f2340',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  plateSm: { borderWidth: 1.2, borderRadius: 5 },
+  plateStripe: { width: 6, backgroundColor: '#1d4ed8' },
+  plateText: {
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1f2340',
+    letterSpacing: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingVertical: 8 },
+  listRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  rowLabel: { fontSize: 15, fontWeight: '600', color: C.text },
+  rowDetail: { fontSize: 12.5, lineHeight: 17, color: C.muted, marginTop: 1 },
 });

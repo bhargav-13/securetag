@@ -1,6 +1,6 @@
 import { API_URL } from './config';
 import { supabase } from './supabase';
-import type { Contact, LegacyItem, LookupResult, Me, ScanStatus, Tag } from './types';
+import type { Contact, LegacyItem, LookupResult, Me, NotifyPrefs, ScanStatus, Tag } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -86,7 +86,14 @@ export const api = {
   setItemLostMode: (code: string, on: boolean) =>
     request<{ ok: true }>(`/api/mobile/legacy/${encodeURIComponent(code)}`, { method: 'PATCH', body: { on } }),
 
-  createScan: (body: { tagId: string; reason: string; message?: string; lat?: number | null; lng?: number | null }) =>
+  createScan: (body: {
+    tagId: string;
+    reason: string;
+    message?: string;
+    lat?: number | null;
+    lng?: number | null;
+    pushToken?: string | null;
+  }) =>
     request<{ requestId: string; status: 'pending' | 'auto'; contact?: Contact }>('/api/mobile/scan', {
       method: 'POST',
       body,
@@ -108,6 +115,9 @@ export const api = {
     }),
   respond: (requestId: string, decision: 'accepted' | 'declined') =>
     request<{ ok: true }>(`/api/mobile/scan/${encodeURIComponent(requestId)}`, { method: 'POST', body: { decision } }),
+
+  setPrefs: (changes: Partial<NotifyPrefs>) =>
+    request<{ ok: true; prefs: NotifyPrefs }>('/api/mobile/prefs', { method: 'PUT', body: changes }),
 
   registerPush: (token: string) => request<{ ok: true }>('/api/mobile/push', { method: 'POST', body: { token } }),
   unregisterPush: (token: string) => request<{ ok: true }>('/api/mobile/push', { method: 'DELETE', body: { token } }),
