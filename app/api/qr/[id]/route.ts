@@ -6,6 +6,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  if (!/^[A-Za-z0-9]{4,16}$/.test(params.id)) return new Response("Invalid tag id.", { status: 400 });
   const base =
     process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
   const legacy = !!req.nextUrl.searchParams.get("legacy");

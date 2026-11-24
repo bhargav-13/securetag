@@ -3,6 +3,12 @@
 Production build: Next.js + Supabase (Auth, Postgres, RLS, Realtime). Consent-
 gated contact sharing, Lost Mode, DB-driven roles, and email alerts.
 
+## Mobile app notifications (optional SQL)
+
+Run `supabase-notifications.sql` once in Supabase → SQL Editor. It adds one
+column so a person who scans a tag **from the app** is notified when the owner
+answers, even with the app closed. Everything else works without it.
+
 ## The flow
 - **Landing** → product info + Login/Register.
 - **Admin** (role in DB) → `/dashboard`: all tags, generate codes, bulk ZIP /
@@ -44,6 +50,15 @@ RESEND_API_KEY=re_xxx
 EMAIL_FROM=SecureTag <onboarding@resend.dev>
 ```
 Leave blank to disable — in-app realtime alerts still work.
+
+## Security fix to run once
+Paste [`supabase-security-fix.sql`](./supabase-security-fix.sql) into the Supabase SQL Editor and run it.
+It removes a policy that let any logged-in user make themselves an admin.
+(The full schema file already includes it for new projects.)
+
+## Mobile app
+The Expo app lives in [`mobile/`](./mobile/README.md). It needs this site running:
+`npm run dev:mobile` (port 4100, reachable from a phone on the same Wi-Fi).
 
 ## Run
 ```bash

@@ -14,6 +14,9 @@ export function normalizePhone(raw?: string | null): string | null {
   if (!raw) return null;
   let d = raw.replace(/\D/g, "");
   if (!d) return null;
+  // Already international ("+65 9123 4567"): the digits ARE the full number.
+  // Guessing a country code here would send the alert to a stranger.
+  if (raw.trim().startsWith("+")) return d;
   if (d.startsWith("0")) d = d.slice(1);
   if (d.length === 10) d = "91" + d; // assume India if no country code
   return d;

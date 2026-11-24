@@ -207,7 +207,8 @@ export function TextArea(p: Omit<InputProps, "type" | "inputMode"> & { rows?: nu
 export function SelectField(
   p: Omit<InputProps, "type" | "inputMode" | "placeholder"> & { options: [string, string][]; fallback?: string }
 ) {
-  const def = useDefault(p.name) || p.fallback || "";
+  const stored = useDefault(p.name);
+  const def = (stored && p.options.some(([v]) => v === stored) ? stored : p.fallback) || "";
   return (
     <FieldFrame name={p.name} label={p.label} required={p.required} hint={p.hint}>
       {({ id, describedBy, invalid }) => (

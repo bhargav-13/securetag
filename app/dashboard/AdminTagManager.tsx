@@ -208,6 +208,10 @@ export default function AdminTagManager({
 
       // Multiple batches: fetch each, merge every file into one combined ZIP.
       const combined = new JSZip();
+      // Every batch ships its own codes.csv; stitch them into one list instead
+      // of letting the last batch overwrite the rest.
+      const csvRows: string[] = [];
+      let csvHeader = "";
       let done = 0;
       for (const batch of batches) {
         const fd = new FormData();
@@ -220,11 +224,18 @@ export default function AdminTagManager({
         const partZip = await JSZip.loadAsync(blob);
         for (const [filename, file] of Object.entries(partZip.files)) {
           if (file.dir) continue;
+          if (filename === "codes.csv") {
+            const [head, ...rest] = (await file.async("string")).split("\n").filter(Boolean);
+            csvHeader ||= head;
+            csvRows.push(...rest);
+            continue;
+          }
           combined.file(filename, await file.async("uint8array"));
         }
         done += batch.length;
         setProgress({ done, total: ids.length });
       }
+      if (csvHeader) combined.file("codes.csv", [csvHeader, ...csvRows].join("\n") + "\n");
       const finalBlob = await combined.generateAsync({ type: "blob" });
       triggerDownload(finalBlob, style);
     } catch (e) {

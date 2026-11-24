@@ -107,13 +107,31 @@ export function scanAlertText(c: AlertContext): string {
   return lines.join("\n");
 }
 
+/** Scanner-supplied text (reason, note) and owner-entered names end up in
+ *  HTML emails, so everything interpolated below is escaped first. */
+const esc = (v: string | null | undefined) =>
+  String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
+
 /** HTML email version. */
-export function scanAlertEmail(c: AlertContext): { subject: string; html: string } {
-  const emergency = c.role === "emergency" || /emerg|accid/i.test(c.reason);
-  const accent = emergency ? "#dc2626" : "#4e46dc";
+export function scanAlertEmail(raw: AlertContext): { subject: string; html: string } {
+  const emergency = raw.role === "emergency" || /emerg|accid/i.test(raw.reason);
+  // The subject is plain text (not HTML): strip line breaks only.
+  const plain = (v: string | null | undefined) => String(v ?? "").replace(/[\r\n]+/g, " ").trim();
   const subject = emergency
-    ? `URGENT - EMERGENCY: ${c.reason} - ${c.ownerName || "a SecureTag vehicle"}`
-    : `Someone scanned your SecureTag (${c.reason})`;
+    ? `URGENT - EMERGENCY: ${plain(raw.reason)} - ${plain(raw.ownerName) || "a SecureTag vehicle"}`
+    : `Someone scanned your SecureTag (${plain(raw.reason)})`;
+  const c: AlertContext = {
+    ...raw,
+    ownerName: raw.ownerName ? esc(raw.ownerName) : raw.ownerName,
+    vehicle: raw.vehicle ? esc(raw.vehicle) : raw.vehicle,
+    tagId: esc(raw.tagId),
+    reason: esc(raw.reason),
+    message: raw.message ? esc(raw.message) : raw.message,
+    mapsUrl: raw.mapsUrl ? esc(raw.mapsUrl) : raw.mapsUrl,
+    dashboardUrl: esc(raw.dashboardUrl),
+    emergencyName: raw.emergencyName ? esc(raw.emergencyName) : raw.emergencyName,
+  };
+  const accent = emergency ? "#dc2626" : "#4e46dc";
 
   const row = (k: string, v: string) =>
     `<tr><td style="padding:6px 0;color:#6c7291;font-size:14px;width:120px">${k}</td><td style="padding:6px 0;font-weight:600;font-size:14px">${v}</td></tr>`;

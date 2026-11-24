@@ -19,6 +19,9 @@ export function getPublicClient() {
   return createClient(url!, anonKey, { auth: { persistSession: false } });
 }
 
+/* Next.js caches GET fetch() calls made on the server. Database reads must
+   never come from that cache, or a tag keeps showing its old state. */
+const noStoreFetch: typeof fetch = (input, init) => fetch(input, { ...init, cache: "no-store" });
 /**
  * Admin client (service role) — SERVER ONLY.
  * Bypasses Row Level Security, used for claiming and generating tags.
@@ -26,7 +29,7 @@ export function getPublicClient() {
 export function getAdminClient() {
   assertEnv();
   if (!serviceKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
-  return createClient(url!, serviceKey, { auth: { persistSession: false } });
+  return createClient(url!, serviceKey, { auth: { persistSession: false }, global: { fetch: noStoreFetch } });
 }
 
 export type Tag = {

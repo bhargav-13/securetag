@@ -4,29 +4,68 @@
     {
       "name": "securetag-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3100,
       "autoPort": false
     },
     {
       "name": "securetag-prod",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
       "port": 3100,
       "autoPort": false
     },
     {
       "name": "securetag-preview",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "start", "-p", "3210"],
+      "runtimeArgs": [
+        "next",
+        "start",
+        "-p",
+        "3210"
+      ],
       "port": 3210,
       "autoPort": true
     },
     {
       "name": "securetag-legacy",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd /d D:\\securetag-legacy && npm run dev"],
+      "runtimeArgs": [
+        "/c",
+        "cd /d D:\\securetag-legacy && npm run dev"
+      ],
       "port": 3200
+    },
+    {
+      "name": "securetag-mobile-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "mobile",
+        "run",
+        "web",
+        "--",
+        "--port",
+        "8090"
+      ],
+      "port": 8090,
+      "autoPort": false
+    },
+    {
+      "name": "securetag-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:mobile"
+      ],
+      "port": 4100,
+      "autoPort": false
     }
   ]
 }

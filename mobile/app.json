@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "SecureTag",
+    "slug": "securetag",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "securetag",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "in.securetag.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "SecureTag uses the camera to scan the QR code on a tag.",
+        "NSLocationWhenInUseUsageDescription": "SecureTag shares where you are with the tag's owner when you ask to reach them, so they can find their vehicle.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "in.securetag.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#4e46dc",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#4e46dc",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SecureTag uses the camera to scan the QR code on a tag.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SecureTag shares where you are with the tag's owner when you ask to reach them, so they can find their vehicle."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4e46dc",
+          "defaultChannel": "requests",
+          "sounds": [
+            "./assets/sounds/emergency.wav"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "reactCompiler": true
+    }
+  }
+}

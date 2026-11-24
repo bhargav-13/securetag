@@ -1,7 +1,24 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/* The mobile app's JSON API authenticates with a bearer token, never cookies,
+   so it is safe to call from any origin (the Expo web preview needs this). */
+const API_CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+  "Access-Control-Max-Age": "86400",
+};
+
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  if (path.startsWith("/api/mobile/") || path.startsWith("/api/scan/status/")) {
+    if (request.method === "OPTIONS") return new NextResponse(null, { status: 204, headers: API_CORS });
+    const res = NextResponse.next({ request });
+    Object.entries(API_CORS).forEach(([k, v]) => res.headers.set(k, v));
+    return res;
+  }
+
   let response = NextResponse.next({ request });
 
   // Skip if Supabase isn't configured yet.

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSessionUser, requireAdmin } from "@/lib/auth";
-import { notifyOnScan, isEmergencyReason } from "@/lib/notify";
+import { createScan, attachLocation, respondScan, type ScanResult as ScanResultT } from "@/lib/scan";
 import { LEGACY_ALPHABET, LEGACY_CODE_RE } from "@/lib/legacy";
 import { safeNext } from "@/lib/nextContext";
 import { parseSignUpForm, parseVehicleForm, parseLegacyForm, invalid, hasErrors, type FormState } from "@/lib/forms";
@@ -322,31 +322,12 @@ export async function generateTags(_prev: FormState, formData: FormData): Promis
   redirect("/dashboard?created=" + count);
 }
 
-/* -------------------- SCAN REQUESTS (notify & accept) -------------------- */
+/* -------------------- SCAN REQUESTS (notify & accept) --------------------
+   The logic lives in lib/scan.ts so the mobile API shares it. */
 
-export type ScanResult = {
-  requestId: string;
-  status: "pending" | "auto";
-  contact?: {
-    owner_name: string | null;
-    phone: string | null;
-    car_model: string | null;
-    plate_number: string | null;
-    message: string | null;
-    emergency_contact_name: string | null;
-    emergency_contact_phone: string | null;
-    alt_phone: string | null;
-    alt_email: string | null;
-    address: string | null;
-  };
-  error?: string;
-};
+export type ScanResult = ScanResultT;
 
-/**
- * A (possibly anonymous) scanner submits a contact request.
- * Returns contact ONLY if the tag is in Lost Mode (auto-share); otherwise the
- * owner must Accept first — the scanner polls status until then.
- */
+/** A (possibly anonymous) scanner submits a contact request. */
 export async function createScanRequest(input: {
   tagId: string;
   reason: string;
@@ -354,89 +335,17 @@ export async function createScanRequest(input: {
   lat?: number | null;
   lng?: number | null;
 }): Promise<ScanResult> {
-  const db = getAdminClient();
-  const { data: tag } = await db.from("tags").select("*").eq("id", input.tagId).maybeSingle();
-  if (!tag || !tag.claimed) return { requestId: "", status: "pending", error: "Tag not registered." };
-
-  const reason = input.reason || "Other";
-  const emergency = isEmergencyReason(reason);
-  // Lost Mode OR an emergency/accident → share contact immediately (no Accept).
-  const immediate = Boolean(tag.lost_mode) || emergency;
-  const status = immediate ? "auto" : "pending";
-
-  const { data: inserted, error } = await db
-    .from("scan_requests")
-    .insert({
-      tag_id: tag.id,
-      owner_user_id: tag.owner_user_id,
-      reason,
-      scanner_message: input.message || null,
-      scanner_lat: input.lat ?? null,
-      scanner_lng: input.lng ?? null,
-      status,
-      responded_at: immediate ? new Date().toISOString() : null,
-    })
-    .select("id")
-    .single();
-  if (error || !inserted) return { requestId: "", status: "pending", error: error?.message || "Failed." };
-
-  // Alert the owner (always) + emergency/alt contacts (if emergency) across
-  // email + WhatsApp, with the scanner's note and live location. Each channel
-  // no-ops if its provider isn't configured.
-  let ownerEmail: string | null = null;
-  if (tag.owner_user_id) {
-    const { data: profile } = await db
-      .from("profiles")
-      .select("email")
-      .eq("id", tag.owner_user_id)
-      .maybeSingle();
-    ownerEmail = profile?.email ?? null;
-  }
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3100";
-  await notifyOnScan({
-    tag,
-    ownerEmail,
-    reason,
-    message: input.message,
-    lat: input.lat,
-    lng: input.lng,
-    baseUrl,
-  });
-
   // NOTE: intentionally no revalidatePath here. This action is called by the
   // (anonymous) scanner from the tag page; revalidating would trigger a router
   // refresh that remounts the scanner's RequestFlow and drops the "waiting"
   // state. The owner's dashboard picks up the new request via its own polling
   // + Realtime subscription instead.
-
-  if (immediate) {
-    return {
-      requestId: inserted.id,
-      status: "auto",
-      contact: {
-        owner_name: tag.owner_name,
-        phone: tag.phone,
-        car_model: tag.car_model,
-        plate_number: tag.plate_number,
-        message: tag.message,
-        emergency_contact_name: tag.emergency_contact_name,
-        emergency_contact_phone: tag.emergency_contact_phone,
-        alt_phone: tag.alt_phone,
-        alt_email: tag.alt_email,
-        address: tag.address,
-      },
-    };
-  }
-  return { requestId: inserted.id, status: "pending" };
+  return createScan(input);
 }
 
 /** Scanner consents to share their location (used mainly for Lost Mode). */
 export async function attachScanLocation(requestId: string, lat: number, lng: number) {
-  if (!requestId) return;
-  const db = getAdminClient();
-  await db.from("scan_requests").update({ scanner_lat: lat, scanner_lng: lng }).eq("id", requestId);
-  // No revalidatePath: this is called from the scanner's page. The owner's
-  // dashboard reflects the location via its polling/Realtime refresh.
+  await attachLocation(requestId, lat, lng);
 }
 
 /** Owner accepts or declines a pending scan request. */
@@ -445,22 +354,7 @@ export async function respondToScan(formData: FormData) {
   if (!user) return;
   const requestId = String(formData.get("requestId") || "").trim();
   const decision = String(formData.get("decision") || "");
-  if (!requestId || !["accepted", "declined"].includes(decision)) return;
-
-  const db = getAdminClient();
-  const { data: req } = await db
-    .from("scan_requests")
-    .select("id, owner_user_id, status")
-    .eq("id", requestId)
-    .maybeSingle();
-  if (!req) return;
-  if (!user.isAdmin && req.owner_user_id !== user.id) return;
-  if (req.status !== "pending") return;
-
-  await db
-    .from("scan_requests")
-    .update({ status: decision, responded_at: new Date().toISOString() })
-    .eq("id", requestId);
+  await respondScan(user, requestId, decision);
   revalidatePath("/dashboard");
 }
 
