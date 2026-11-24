@@ -1,3 +1,4 @@
-mobile
-migrations_csv
-manual
+# Leading slash: only the top-level folders. A bare "mobile" also hid app/api/mobile.
+/mobile
+/migrations_csv
+/manual
